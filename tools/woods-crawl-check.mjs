@@ -124,44 +124,53 @@ for (const [name, spec, trailer] of motors) {
   const revUpKmh = revUphill.v.speed * KMH;
   assert.ok(revUpKmh <= -0.85 && revUpKmh >= -1.05, `${name}: 10% uphill reverse must hold ~-1 km/h (got ${revUpKmh.toFixed(3)} km/h)`);
 
-  // 20% downhill bank in woods: brush still caps speed near ~1 km/h.
+  // 20% downhill bank in woods: throttle holds ~1 km/h, and releasing throttle stops cleanly at 0.
   const downhill = makeVehicle(spec, makeTerrain({ height: x => -x * 0.2 }), { trailer });
   step(downhill.v, downhill.tow, 3, { throttle: 1, steer: 0, handbrake: false });
   const downKmh = downhill.v.speed * KMH;
   assert.ok(downKmh >= 0.9 && downKmh <= 1.15, `${name}: 20% downhill crawl must stay near ~1 km/h (got ${downKmh.toFixed(3)} km/h)`);
+  step(downhill.v, downhill.tow, 2, { throttle: 0, steer: 0, handbrake: false });
+  assert.equal(downhill.v.speed, 0, `${name}: releasing throttle on a 20% downhill in woods must stop cleanly at 0`);
 
   console.log('PASS', name, `entry=${entryKmh.toFixed(2)} fwd=${fwdKmh.toFixed(2)} rev=${revKmh.toFixed(2)} up=${upKmh.toFixed(2)} revUp=${revUpKmh.toFixed(2)} down=${downKmh.toFixed(2)} km/h`);
 }
 
-// 2. Drive into roadside woods, reverse out AND steer forward out onto open grass, regaining normal speed without resetting.
+// 2. Input-only exits from roadside woods (no pose/speed edits): both continuous steering forward and straight reverse, plus touch mode.
 {
   const strip = makeTerrain({ canopy: x => (x > 2 ? 8 : 0) });
-  const { v } = makeVehicle(CAR_SPEC, strip, { x: 0, z: 0, heading: Math.PI / 2 });
-  v.vx = v.speed = 40 / KMH;
-  step(v, null, 3, { throttle: 1, steer: 0, handbrake: false });
-  assert.ok(v.x > 4 && v.surfaceName === 'brush', `car must enter woods (x=${v.x.toFixed(2)}, surf=${v.surfaceName})`);
-  assert.ok(v.speed * KMH >= 0.9 && v.speed * KMH <= 1.05, `car must crawl in woods (${(v.speed * KMH).toFixed(2)} km/h)`);
 
-  // Steering in woods turns the car cleanly while crawling forward.
-  const headingBefore = v.heading;
-  step(v, null, 4, { throttle: 1, steer: -1, handbrake: false });
-  assert.ok(Math.abs(v.heading - headingBefore) > 0.2, `car must steer while crawling in woods (delta=${Math.abs(v.heading - headingBefore).toFixed(2)} rad)`);
+  // 2a. Continuous steering forward exit (input-only).
+  const steerOut = makeVehicle(CAR_SPEC, strip, { x: 0, z: 0, heading: Math.PI / 2 });
+  steerOut.v.vx = steerOut.v.speed = 40 / KMH;
+  step(steerOut.v, null, 3, { throttle: 1, steer: 0, handbrake: false });
+  assert.ok(steerOut.v.x > 4 && steerOut.v.surfaceName === 'brush', `car must enter woods (x=${steerOut.v.x.toFixed(2)}, surf=${steerOut.v.surfaceName})`);
+  assert.ok(steerOut.v.speed * KMH >= 0.9 && steerOut.v.speed * KMH <= 1.05, `car must crawl in woods (${(steerOut.v.speed * KMH).toFixed(2)} km/h)`);
 
-  // Reverse straight back out of the woods without ever calling respawn.
-  v.heading = Math.PI / 2;
-  v.vx = v.vz = v.speed = 0;
-  let escaped = false;
-  for (let sec = 0; sec < 60; sec++) {
-    step(v, null, 1, { throttle: -1, steer: 0, handbrake: false });
-    if (v.x < 1.5 && v.surfaceName === 'grass') { escaped = true; break; }
+  let steeredOut = false;
+  for (let halfSec = 0; halfSec < 240; halfSec++) {
+    const faceWest = Math.sin(steerOut.v.heading) < -0.95;
+    step(steerOut.v, null, 0.5, { throttle: 1, steer: faceWest ? 0 : -1, handbrake: false });
+    if (steerOut.v.x < 1.5 && steerOut.v.surfaceName === 'grass') { steeredOut = true; break; }
   }
-  assert.ok(escaped, `car must reverse out of woods without reset (ended at x=${v.x.toFixed(2)}, surf=${v.surfaceName})`);
-  // Forward back on grass resumes normal speed (heading west into open x < 2).
-  v.heading = -Math.PI / 2;
-  v.vx = v.vz = v.speed = 0;
-  step(v, null, 3, { throttle: 1, steer: 0, handbrake: false });
-  assert.ok(v.speed * KMH > 20, `car must regain normal speed after leaving woods (got ${(v.speed * KMH).toFixed(1)} km/h)`);
-  console.log('PASS exit-woods', `escaped at x=${v.x.toFixed(2)}, regained ${(v.speed * KMH).toFixed(1)} km/h`);
+  assert.ok(steeredOut, `car must turn and drive forward out of woods using input only (ended at x=${steerOut.v.x.toFixed(2)}, surf=${steerOut.v.surfaceName})`);
+  step(steerOut.v, null, 3, { throttle: 1, steer: 0, handbrake: false });
+  assert.ok(steerOut.v.speed * KMH > 20, `car must regain normal speed after steering out (got ${(steerOut.v.speed * KMH).toFixed(1)} km/h)`);
+
+  // 2b. Reverse exit (input-only) with touch limiter enabled.
+  const touchOut = makeVehicle(CAR_SPEC, strip, { x: 0, z: 0, heading: Math.PI / 2 });
+  touchOut.v.strongHelp = true;
+  touchOut.v.touchSpeedLimit = true;
+  touchOut.v.vx = touchOut.v.speed = 40 / KMH;
+  step(touchOut.v, null, 3, { throttle: 1, steer: 0, handbrake: false, touch: true });
+  assert.ok(touchOut.v.x > 4 && touchOut.v.surfaceName === 'brush', 'touch car must enter woods');
+  assert.ok(touchOut.v.speed * KMH >= 0.9 && touchOut.v.speed * KMH <= 1.05, `touch woods crawl must hold ~1 km/h (got ${(touchOut.v.speed * KMH).toFixed(2)} km/h)`);
+  let reversedOut = false;
+  for (let sec = 0; sec < 60; sec++) {
+    step(touchOut.v, null, 1, { throttle: -1, steer: 0, handbrake: false, touch: true });
+    if (touchOut.v.x < 1.5 && touchOut.v.surfaceName === 'grass') { reversedOut = true; break; }
+  }
+  assert.ok(reversedOut, `touch car must reverse out of woods without reset (ended at x=${touchOut.v.x.toFixed(2)}, surf=${touchOut.v.surfaceName})`);
+  console.log('PASS exit-woods', `steeredOut x=${steerOut.v.x.toFixed(2)} speed=${(steerOut.v.speed * KMH).toFixed(1)} km/h, touchRevOut x=${touchOut.v.x.toFixed(2)}`);
 }
 
 // 2b. Braking during high-speed woods entry still brakes harder than coasting, and drifting into woods settles to crawl.
@@ -217,25 +226,46 @@ for (const [name, spec, trailer] of motors) {
   console.log('PASS solid-in-woods', `nose=${noseX.toFixed(2)} impacts=${impacts}`);
 }
 
-// 4. Crawling in woods causes zero damage and zero lawn ruts/complaints.
+// 4. Crawling in roadside woods (including a deep 1.2 m roadside ditch beside a house) causes zero repair damage and zero lawn ruts/complaints.
 {
-  const t = makeTerrain();
-  const { v } = makeVehicle(CAR_SPEC, t, { x: 0, z: 0, heading: Math.PI / 2 });
+  const ditchTerrain = makeTerrain({
+    height: (x, _z) => (x < 1 ? 0 : -1.2),
+    canopy: (x, _z) => (x < 1 ? 0 : 8),
+    roadDist: (x, _z) => Math.max(0, x),
+  });
+  const ditchRoads = {
+    nearest: (_x, z, _r, filter) => {
+      const road = { id: 1, kind: 2, bridge: false, halfWidth: 3.5 };
+      if (filter && !filter(road)) return null;
+      return { x: 0, z, dist: 5, heading: 0, road, seg: 0, t: 0 };
+    },
+    deckHeight: () => null,
+    roads: [],
+  };
+  const root = new THREE.Group();
+  const rig = {
+    root, body: node(), driverEye: node(), brakeLights: [],
+    steer: { fl: node(), fr: node() }, wheels: { fl: node(), fr: node(), rl: node(), rr: node() },
+  };
+  const v = new Vehicle(rig, ditchTerrain, ditchRoads, -100, CAR_SPEC);
+  assert.ok(v.place(6, 0, 0), 'ditch woods placement must succeed');
+  v.assist = 0;
   const dmg = new Damage();
   v.damageActive = true;
   v.damage = dmg;
   let lawnCalls = 0;
-  const ruts = new Ruts(t, [{ id: 1, kind: 'house', x: 5, y: 0 }], [0, 0], false, () => { lawnCalls++; });
+  const ruts = new Ruts(ditchTerrain, [{ id: 1, kind: 'house', x: 8, y: 0 }], [0, 0], false, () => { lawnCalls++; });
   step(v, null, 15, { throttle: 1, steer: 0, handbrake: false }, i => {
     if (i % 2 === 0) ruts.update(v, i * dt);
   });
-  assert.equal(dmg.total, 0, `woods crawl must incur $0 repair damage (got $${dmg.total})`);
+  assert.equal(v.surfaceName, 'brush', 'ditch fixture must stay in brush');
+  assert.equal(dmg.total, 0, `woods crawl in a deep roadside ditch must incur $0 repair damage (got $${dmg.total})`);
   assert.equal(ruts.count, 0, `woods crawl must leave 0 lawn ruts (got ${ruts.count})`);
   assert.equal(lawnCalls, 0, `woods crawl must trigger 0 lawn complaints (got ${lawnCalls})`);
-  console.log('PASS woods-scoring', 'damage=$0 ruts=0 complaints=0');
+  console.log('PASS woods-scoring', 'ditchDepth=1.2m damage=$0 ruts=0 complaints=0');
 }
 
-// 5. Horse and dirt bike keep their own brush speeds untouched.
+// 5. Horse (pace + steep-slope park threshold) and dirt bike keep their own brush behavior untouched.
 {
   const t = makeTerrain();
   const { v: horse } = makeVehicle(HORSE_SPEC, t, { x: 0, z: 0, heading: Math.PI / 2 });
@@ -243,9 +273,14 @@ for (const [name, spec, trailer] of motors) {
   const expectedHorse = horseSpeedLimit('brush', 0);
   assert.ok(Math.abs(horse.speed - expectedHorse) < 0.05, `horse must keep its brush pace ${expectedHorse.toFixed(2)} m/s (got ${horse.speed.toFixed(2)})`);
 
+  // Preserved surf.roll = 0.5 keeps the horse parked on a 30% brush slope when throttle is 0.
+  const { v: parkedHorse } = makeVehicle(HORSE_SPEC, makeTerrain({ height: x => -x * 0.3 }), { x: 0, z: 0, heading: Math.PI / 2 });
+  step(parkedHorse, null, 2, { throttle: 0, steer: 0, handbrake: false });
+  assert.equal(parkedHorse.speed, 0, `horse must stay parked on 30% brush slope with throttle 0 (got ${parkedHorse.speed})`);
+
   const bike = new BikeRide({ root: new THREE.Group(), pose() {}, driverEye: node() }, t, roads, -100);
   assert.ok(bike.place(0, 0, Math.PI / 2));
   step(bike, null, 8, { throttle: 1, steer: 0, handbrake: false });
   assert.ok(bike.speed * KMH > 30, `dirt bike must keep its Sugar Camp brush pace (got ${(bike.speed * KMH).toFixed(1)} km/h)`);
-  console.log('PASS horse-and-bike', `horse=${(horse.speed * KMH).toFixed(1)} km/h bike=${(bike.speed * KMH).toFixed(1)} km/h`);
+  console.log('PASS horse-and-bike', `horse=${(horse.speed * KMH).toFixed(1)} km/h parked=0 bike=${(bike.speed * KMH).toFixed(1)} km/h`);
 }

@@ -43,7 +43,7 @@ const SURFACES = {
   // A rough stretch (rough-roads.ts): mud and loose stone in broken ruts. It sounds and throws dirt as a dirt track.
   rough: { mu: 0.55, roll: 0.075, rough: 0.05, name: 'dirt track' },
   grass: { mu: 0.5, roll: 0.09, rough: 0.04, name: 'grass' },
-  brush: { mu: 0.42, roll: 0.06, rough: 0.07, name: 'brush' },
+  brush: { mu: 0.42, roll: 0.5, rough: 0.07, name: 'brush' },
 };
 
 /**
@@ -832,9 +832,10 @@ export class Vehicle {
       // On washboard the tyres skip from ridge to ridge: the faster the car, the less they hold.
       const skip = surf === SURFACES.washboard ? THREE.MathUtils.clamp(1 - (Math.abs(vf) - 5) / 15, 0.28, 1) : 1;
       const horse = this.spec.locomotion === 'horse';
-      const brushCrawl = !horse && surf === SURFACES.brush;
-      const vfBefore = vf;
       const mu = surf.mu * skip * snowGrip, t = input.throttle;
+      const brushCrawl = !horse && surf === SURFACES.brush;
+      const brushDrive = brushCrawl && t !== 0;
+      const vfBefore = vf;
       const hoofGrip = horse ? .9 : mu;
       let a = 0;
       if (t > 0 && vf > -0.5) a += t * Math.min(this.spec.engineAcceleration, this.spec.enginePower / (Math.abs(vf) + 1), hoofGrip * G * this.spec.tractionShare);       // power, then traction
@@ -860,9 +861,9 @@ export class Vehicle {
       a -= horse && onDeck ? 0 : G * Math.sin(slopeF);
       const hard = Math.abs(input.steer);
       if (hard > 0.6 && Math.abs(vf) > 13) a -= Math.sign(vf) * this.spec.hardSteerDrag * ((hard - 0.6) / 0.4) * Math.min(1, (Math.abs(vf) - 13) / 10);
-      const brushExcess = brushCrawl ? Math.max(0, Math.abs(vf) - BRUSH_CRAWL_SPEED) : 0;
-      const drag = (horse ? .022 : surf.roll) * G + (this.towLoad && this.spec.mass ? this.spec.aeroDrag * vf * vf * (1 + this.towLoad.dragShare * this.towLoad.mass / this.spec.mass) : this.spec.aeroDrag * vf * vf)
-        + (brushExcess > 0 ? Math.min(4.3, brushExcess * 40) + 0.9 * Math.abs(vf) : 0)
+      const brushExcess = brushDrive ? Math.max(0, Math.abs(vf) - BRUSH_CRAWL_SPEED) : 0;
+      const drag = (horse ? .022 : brushDrive ? 0.06 : surf.roll) * G + (this.towLoad && this.spec.mass ? this.spec.aeroDrag * vf * vf * (1 + this.towLoad.dragShare * this.towLoad.mass / this.spec.mass) : this.spec.aeroDrag * vf * vf)
+        + (!horse && surf === SURFACES.brush ? (brushDrive ? (brushExcess > 0 ? Math.min(4.3, brushExcess * 40) + 0.9 * Math.abs(vf) : 0) : 0.9 * Math.abs(vf)) : 0)
         + deepest * 45 * Math.min(1, Math.abs(vf) / 3)   // a wheel in a pothole drags hard
         + wet * PUDDLE_DRAG * Math.abs(vf);              // and water holds the wheels back
       // Resistance cannot reverse the car: it only brings it to rest.
@@ -1054,8 +1055,7 @@ export class Vehicle {
     a -= G * Math.sin(slopeF);
     const measured = slideAngle(vf, vl), m = d.step(spec, input, g, measured, dt);
     const aero = this.towLoad && this.spec.mass ? this.spec.aeroDrag * (1 + this.towLoad.dragShare * this.towLoad.mass / this.spec.mass) : this.spec.aeroDrag;
-    const brushExcess = surf === SURFACES.brush ? Math.max(0, v - BRUSH_CRAWL_SPEED) : 0;
-    const drag = surf.roll * G + aero * v * v + (brushExcess > 0 ? Math.min(4.3, brushExcess * 40) + .9 * v : 0) + deepest * 45 * Math.min(1, v / 3) + wet * PUDDLE_DRAG * v + m.scrub;
+    const drag = surf.roll * G + aero * v * v + (surf === SURFACES.brush ? .9 * v : 0) + deepest * 45 * Math.min(1, v / 3) + wet * PUDDLE_DRAG * v + m.scrub;
     v = Math.max(0, v + (a - drag) * dt);
     // The path turns; the nose leads it by the new slide angle.
     this.heading = this.heading - measured + m.pathRate * dt + m.angle;

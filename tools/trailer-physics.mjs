@@ -124,7 +124,7 @@ const plain=path(false),detached=path(true);assert.deepEqual(detached,plain,'det
 if(process.env.TRAILER_TRUCK_ORACLE){
  const{Vehicle:Stock,autopilot:stockAutopilot}=await import(process.env.TRAILER_TRUCK_ORACLE);
  assertBeforeFlight(path(false,Stock),plain,'standalone truck matches main before the first flight');
- const demoCar=(Kind,driver,spec=CAR_SPEC)=>{const old=Math.random;Math.random=random(411);try{const car=new Kind(createTruck(),terrain,roads,-.2,spec),p=at(hwy,flat.s);car.place(p.x,p.z,p.heading);const states=[];for(let i=0;i<1800;i++){terrain.withGroundContact(car,()=>car.update(dt,driver(car,roads,16)));states.push([car.x,car.z,car.y,car.vx,car.vz,car.airborne?car.vy:0,car.heading,car.speed,car.airborne]);}return states;}finally{Math.random=old;}};
+ const demoCar=(Kind,driver,spec=CAR_SPEC)=>{const old=Math.random;Math.random=random(411);try{const car=new Kind(createTruck(),terrain,roads,-.2,spec),p=at(hwy,flat.s);car.place(p.x,p.z,p.heading);const states=[];for(let i=0;i<1800;i++){terrain.withGroundContact(car,()=>car.update(dt,driver(car,roads,16)));states.push([car.x,car.z,car.y,car.vx,car.vz,car.airborne?car.vy:0,car.heading,car.speed,car.airborne,car.surfaceName==='brush']);}return states;}finally{Math.random=old;}};
  assertBeforeFlight(demoCar(Stock,stockAutopilot),demoCar(Vehicle,autopilot),'car autopilot matches main before the first flight');
  assertBeforeFlight(demoCar(Stock,stockAutopilot,TRUCK_SPEC),demoCar(Vehicle,autopilot,TRUCK_SPEC),'untowed truck autopilot matches main before the first flight');
  let washStart=1800;for(;washStart<3100;washStart+=10){const p=at(mines,washStart);if(terrain.surfaceAt(p.x,p.z)?.washboard)break;}assert.ok(washStart<3100,'washboard oracle section exists');
