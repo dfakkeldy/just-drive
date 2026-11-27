@@ -118,6 +118,7 @@ body.tcOn.compactPhone #phoneAux{width:fit-content;align-self:end}
 body.tcOn.compactPhone #phoneStatus{max-height:56px;overflow:hidden}
 body.tcOn.compactPhone #phoneStatus:has(#firedLine):has(:is(#raceReadout,#gameReadout):not([hidden])){gap:1px}
 body.tcOn.compactPhone #phoneStatus:has(#firedLine):has(:is(#raceReadout,#gameReadout):not([hidden]))>:is(#phoneLine,#firedLine,#raceReadout,#gameReadout){line-height:15px;padding:1px 5px}
+body.tcOn.compactPhone #phoneStatus:has(#firedLine):has(#raceReadout:not([hidden])):has(#gameReadout:not([hidden]))>:is(#phoneLine,#firedLine,#raceReadout,#gameReadout){font-size:9px;line-height:13px;padding:0 4px}
 body.tcOn.compactPhone #placeArrival{overflow-wrap:anywhere}
 body.tcOn.compactPhone #phoneHint{width:min(22vw,calc(25vw - 12px - var(--safe-left)))}
 body.tcOn.compactPhone #phoneReadouts{flex:none;width:min(22vw,calc(25vw - 12px - var(--safe-left)));max-width:190px;

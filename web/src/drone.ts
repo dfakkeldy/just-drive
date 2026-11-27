@@ -299,10 +299,11 @@ export class Drone {
     let bottom = topEdge, rightPx = gear?.width ? innerWidth - gear.right : 10;
     const photo = visible('photoTag');
     if (photo) {
-      const helpHeight = this.help.getBoundingClientRect().height;
+      const helpBox = this.help.getBoundingClientRect();
       const fired = visible('firedHud');
       const underPhoto = Math.max(topEdge, photo.bottom) + 10;
-      if (fired && helpHeight > 0 && underPhoto + helpHeight > fired.top - 10) rightPx = Math.max(rightPx, innerWidth - photo.left + 10);
+      const fitsLeft = helpBox.width > 0 && photo.left - 10 - helpBox.width >= 10;
+      if (fired && helpBox.height > 0 && underPhoto + helpBox.height > fired.top - 10 && fitsLeft) rightPx = Math.max(rightPx, innerWidth - photo.left + 10);
       else bottom = Math.max(bottom, photo.bottom);
     }
     const top = `${bottom + 10}px`, right = `${rightPx}px`;

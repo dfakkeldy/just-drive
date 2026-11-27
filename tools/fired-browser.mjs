@@ -174,10 +174,12 @@ try {
     for (let i = 0; i < 360 && !ready; i++) { await sleep(500); ready = await read("document.documentElement.dataset.mmmReady === 'true' && !!window.mmm?.shift"); }
     assert.equal(ready, true, `Mabou settles (${query} ${w}x${h})`);
     await read("if (!document.getElementById('title').hidden) { document.getElementById('titleStart').click(); document.activeElement?.blur(); }");
-    for (let i = 0; i < 60; i++) {
-      if (await read("mmm.mp?.current?.net?.status === 'on' && !!document.getElementById('mpSocial') && !!document.getElementById('racePanel') && !!document.getElementById('gamePanel') && !document.getElementById('gamePanel').hidden")) break;
-      await sleep(200);
+    let mpReady = false;
+    for (let i = 0; i < 60 && !mpReady; i++) {
+      mpReady = await read("mmm.mp?.current?.net?.status === 'on' && !!document.getElementById('mpSocial') && !!document.getElementById('racePanel') && !!document.getElementById('gamePanel') && !document.getElementById('gamePanel').hidden");
+      if (!mpReady) await sleep(200);
     }
+    assert.equal(mpReady, true, `multiplayer room cards ready (${query} ${w}x${h})`);
     await sleep(700);
   };
   try {
@@ -191,7 +193,7 @@ try {
         await c.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
         await sleep(700);
         const driveBoxes = await collectBoxes(desktopIds);
-        assert.ok(driveBoxes.some(b => b[0] === 'mpCards') && driveBoxes.some(b => b[0] === 'firedHud'), `${label} ${w}x${h} drive: both mpCards and firedHud visible`);
+        assert.ok(driveBoxes.some(b => b[0] === 'mpCards') && driveBoxes.some(b => b[0] === 'firedHud') && driveBoxes.some(b => b[0] === 'photoTag'), `${label} ${w}x${h} drive: mpCards, firedHud and photoTag visible`);
         if (label === 'fired') await shot(`fired-mp-${w}x${h}-drive`);
         assert.deepEqual(layoutFaults(driveBoxes, w, h), [], `${label} ${w}x${h} drive: no HUD overlap`);
         // Launch drone (hides mail/camera buttons) and check both with and without droneHints.
@@ -200,11 +202,13 @@ try {
         await sleep(700);
         assert.equal(await read("document.body.classList.contains('droneOn')"), true, `${label} ${w}x${h}: drone active`);
         const droneHintBoxes = await collectBoxes(desktopIds);
-        await read("const h=document.getElementById('droneHints'); if(h) h.style.display='none';");
+        assert.ok(droneHintBoxes.some(b => b[0] === 'droneHints') && droneHintBoxes.some(b => b[0] === 'photoTag') && droneHintBoxes.some(b => b[0] === 'mpCards') && droneHintBoxes.some(b => b[0] === 'firedHud'), `${label} ${w}x${h} drone (with hints): expected overlays visible`);
+        await read("document.getElementById('droneHints')?.style.setProperty('display', 'none')");
         await sleep(700);
         const droneBoxes = await collectBoxes(desktopIds);
+        assert.ok(droneBoxes.some(b => b[0] === 'mpCards') && droneBoxes.some(b => b[0] === 'firedHud'), `${label} ${w}x${h} drone: mpCards and firedHud visible`);
         if (label === 'fired') await shot(`fired-mp-${w}x${h}-drone`);
-        await read("const h=document.getElementById('droneHints'); if(h) h.style.display='';");
+        await read("document.getElementById('droneHints')?.style.removeProperty('display')");
         assert.deepEqual(layoutFaults(droneHintBoxes, w, h), [], `${label} ${w}x${h} drone (with hints): no HUD overlap`);
         assert.deepEqual(layoutFaults(droneBoxes, w, h), [], `${label} ${w}x${h} drone: no HUD overlap`);
         await c.send('Input.dispatchKeyEvent', { type: 'keyDown', code: 'KeyF', key: 'f', windowsVirtualKeyCode: 70 });
@@ -212,8 +216,8 @@ try {
         await sleep(600);
       }
     }
-    // Desktop: Mail (Ride-along) and Just Drive at 1675x997 and 1280x720.
-    for (const [label, query, host] of [['mail', 'mode=mail&rideAlong=1', '127.0.0.1'], ['just', 'site=just&mode=explore', 'localhost']]) {
+    // Desktop: Mail (multiplayer) and Just Drive at 1675x997 and 1280x720.
+    for (const [label, query, host] of [['mail', 'mode=mail', '127.0.0.1'], ['just', 'site=just&mode=explore', 'localhost']]) {
       await openMp(1675, 997, false, query, host);
       if (label === 'mail') await read("document.getElementById('cameraButton').click()");
       else await read("const p=mmm.places?.marks?.[0]; if(p){mmm.vehicle.place(p.x,p.z,0);mmm.vehicle.vx=mmm.vehicle.vz=mmm.vehicle.speed=0;}");
@@ -227,7 +231,7 @@ try {
       }
     }
     // Phone: 390x844 portrait and 844x390 landscape across Get Fired, Daily, Mail and Just Drive with multiplayer.
-    for (const [label, query, host] of [['fired', 'mode=fired', '127.0.0.1'], ['daily', 'daily=1', '127.0.0.1'], ['mail', 'mode=mail&rideAlong=1', '127.0.0.1'], ['just', 'site=just&mode=explore', 'localhost']]) {
+    for (const [label, query, host] of [['fired', 'mode=fired', '127.0.0.1'], ['daily', 'daily=1', '127.0.0.1'], ['mail', 'mode=mail', '127.0.0.1'], ['just', 'site=just&mode=explore', 'localhost']]) {
       for (const [w, h] of [[390, 844], [844, 390]]) {
         await openMp(w, h, true, query, host);
         if (label === 'fired' || label === 'daily') {
@@ -239,6 +243,22 @@ try {
           })()`);
           await sleep(250);
           assert.ok(await read("(() => { const s = document.getElementById('phoneStatus'); return s.scrollHeight <= s.clientHeight + 1; })()"), `${label} phone ${w}x${h}: phoneStatus holds fired + race lines without clipping`);
+          const raceBoxes = await collectBoxes(phoneIds);
+          for (const id of ['phoneLine', 'firedLine', 'raceReadout']) assert.ok(raceBoxes.some(b => b[0] === id), `${label} phone ${w}x${h}: ${id} visible`);
+          assert.deepEqual(layoutFaults(raceBoxes, w, h), [], `${label} phone ${w}x${h} (race): no HUD overlap`);
+          // With an idle race course and an active room game, the idle race readout yields and #gameReadout fits cleanly.
+          await read(`(() => {
+            const m = mmm.mp.current;
+            m.net.race = { ...m.net.race, startAt: 0, racers: [] };
+            m.net.game = { kind: 1, phase: 2, host: 1, serial: 2, left: 45000, at: performance.now(), table: [{ id: 1, score: 10 }], tag: { holder: 1, immune: 0, parcel: { x: mmm.vehicle.x, z: mmm.vehicle.z } } };
+            m.race.update();
+          })()`);
+          await sleep(250);
+          assert.ok(await read("(() => { const s = document.getElementById('phoneStatus'); return s.scrollHeight <= s.clientHeight + 1; })()"), `${label} phone ${w}x${h}: phoneStatus holds fired + game lines without clipping`);
+          const gameBoxes = await collectBoxes(phoneIds);
+          for (const id of ['phoneLine', 'firedLine', 'gameReadout']) assert.ok(gameBoxes.some(b => b[0] === id), `${label} phone ${w}x${h}: ${id} visible`);
+          assert.equal(gameBoxes.some(b => b[0] === 'raceReadout'), false, `${label} phone ${w}x${h}: idle race readout hides during room game`);
+          assert.deepEqual(layoutFaults(gameBoxes, w, h), [], `${label} phone ${w}x${h} (game): no HUD overlap`);
         }
         const boxes = await collectBoxes(phoneIds);
         assert.equal(boxes.some(b => b[0] === 'mpCards' || b[0] === 'firedHud'), false, `${label} phone ${w}x${h}: desktop overlays hidden`);
@@ -250,5 +270,20 @@ try {
   } finally {
     await c.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: mpScript.identifier }).catch(() => {});
   }
+  // Single-player Ride-along HUD check (multiplayer disables Ride-along) at 1675x997, 1280x720, 390x844 and 844x390.
+  for (const [w, h, phone] of [[1675, 997, false], [1280, 720, false], [390, 844, true], [844, 390, true]]) {
+    await c.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: phone });
+    const url = new URL(`/?x=1&title=1&hud=1&radio=0&res=1&scene=0&day=1&run=1&mode=mail&rideAlong=1&mp=0${phone ? '&touch=1&q=low' : ''}`, first);
+    await c.send('Page.navigate', { url: url.href });
+    let ready = false;
+    for (let i = 0; i < 360 && !ready; i++) { await sleep(500); ready = await read("document.documentElement.dataset.mmmReady === 'true' && !!window.mmm?.shift"); }
+    assert.equal(ready, true, `Ride-along settles (${w}x${h})`);
+    await read("if (!document.getElementById('title').hidden) { document.getElementById('titleStart').click(); document.activeElement?.blur(); }");
+    await sleep(500);
+    assert.equal(await read("!!mmm.boss?.today"), true, `Ride-along active (${w}x${h})`);
+    const boxes = await collectBoxes(phone ? phoneIds : desktopIds);
+    assert.deepEqual(layoutFaults(boxes, w, h), [], `ride-along ${w}x${h}: no HUD overlap`);
+  }
+  console.log('PASS Ride-along HUD overlap check: 1675x997, 1280x720, 390x844 and 844x390');
   assert.deepEqual(errors, [], 'runtime exceptions');
 } finally { c.close(); await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`).catch(() => {}); }
