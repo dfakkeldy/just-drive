@@ -166,6 +166,7 @@ try {
     });
   })()`);
   const mpScript = await c.send('Page.addScriptToEvaluateOnNewDocument', { source: mpRoomScript });
+  assert.ok(mpScript.result?.identifier, `addScriptToEvaluateOnNewDocument returned identifier: ${JSON.stringify(mpScript)}`);
   const openMp = async (w, h, phone, query, host = '127.0.0.1') => {
     await c.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: phone });
     const url = new URL(`/?x=1&title=1&hud=1&radio=0&res=1&scene=0&day=1&run=1&mp=1&${phone ? 'touch=1&q=low&' : ''}${query}`, first); url.hostname = host;
@@ -268,7 +269,8 @@ try {
     }
     console.log('PASS multiplayer HUD overlap check: 1675x997, 1280x720, 390x844 and 844x390 across Get Fired, Daily, Mail and Just Drive');
   } finally {
-    await c.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: mpScript.identifier }).catch(() => {});
+    const removed = await c.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: mpScript.result.identifier });
+    assert.ok(!removed.error, `removeScriptToEvaluateOnNewDocument failed: ${JSON.stringify(removed)}`);
   }
   // Single-player Ride-along HUD check (multiplayer disables Ride-along) at 1675x997, 1280x720, 390x844 and 844x390.
   for (const [w, h, phone] of [[1675, 997, false], [1280, 720, false], [390, 844, true], [844, 390, true]]) {
@@ -279,9 +281,11 @@ try {
     for (let i = 0; i < 360 && !ready; i++) { await sleep(500); ready = await read("document.documentElement.dataset.mmmReady === 'true' && !!window.mmm?.shift"); }
     assert.equal(ready, true, `Ride-along settles (${w}x${h})`);
     await read("if (!document.getElementById('title').hidden) { document.getElementById('titleStart').click(); document.activeElement?.blur(); }");
-    await sleep(500);
-    assert.equal(await read("!!mmm.boss?.today"), true, `Ride-along active (${w}x${h})`);
+    await sleep(600);
+    const ride = await read("({ today: !!mmm.boss?.today, post: !!mmm.boss?.post, mp: !!mmm.mp?.current, hint: mmm.boss?.hint ?? '', stopHint: document.getElementById('stopHint')?.textContent ?? '' })");
+    assert.ok(ride.today && ride.post && !ride.mp && ride.hint.length > 0 && ride.stopHint.includes(ride.hint), `Ride-along active with HUD hint (${w}x${h}): ${JSON.stringify(ride)}`);
     const boxes = await collectBoxes(phone ? phoneIds : desktopIds);
+    assert.ok(boxes.some(b => b[0] === (phone ? 'stopHint' : 'mailCard')), `ride-along ${w}x${h}: hint box visible`);
     assert.deepEqual(layoutFaults(boxes, w, h), [], `ride-along ${w}x${h}: no HUD overlap`);
   }
   console.log('PASS Ride-along HUD overlap check: 1675x997, 1280x720, 390x844 and 844x390');
