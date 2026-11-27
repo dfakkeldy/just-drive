@@ -12,8 +12,8 @@ import { cdp, cdpFetch, sleep } from './cdp.mjs';
 
 const [out, first] = process.argv.slice(2), port = process.env.CDP_PORT;
 const catalogue = JSON.parse(readFileSync(new URL('./radio_stations.json', import.meta.url), 'utf8'));
-const talk = catalogue.stations.find(s => s.start === true);
-assert.equal(talk.dial, '94.9', 'the talk station starts the radio');
+const talk = catalogue.stations.find(s => s.tracks.some(t => t.credit === 'talk'));
+assert.equal(talk.dial, '94.9', '94.9 is the talk station');
 // Silence stands in for a call and its nickname: MPEG-1 Layer III frames (128 kbit/s, 44.1 kHz, mono) whose side
 // information is all zero, so each decodes to 1152 silent samples. A real MP3 the browser plays, made without an encoder.
 const silence = (seconds) => {

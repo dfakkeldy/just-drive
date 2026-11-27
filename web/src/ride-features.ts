@@ -5,8 +5,7 @@ import type { GarageEntry } from './garage';
 import { isSxsKind } from './ride-kinds';
 import {HorseRampHint} from './horse-ramp-hint';
 import type {Yard} from './yard';
-import { HorseSound } from './horse-sound';
-import { DEFAULT_ENGINE_VOLUME } from './engine-sound';
+import { DEFAULT_HOOF_VOLUME, HorseSound } from './horse-sound';
 import type { HorseRig } from './horse';
 import { BikeRide } from './bike-ride';
 import { BikeCamera } from './bike-camera';
@@ -62,7 +61,7 @@ export function rideFeatures(vehicle: Ride, entry: GarageEntry, terrain: Terrain
     setRadio(available: boolean): void { radio = available; },
 
     /** The "Hoof sound" volume, 0 to 1. Motors take theirs in engine-sound.ts. */
-    setHoofVolume(v: number): void { if (sound) sound.volume = v / DEFAULT_ENGINE_VOLUME; },
+    setHoofVolume(v: number): void { if (sound) sound.volume = v / DEFAULT_HOOF_VOLUME; },
     honk(): void { if (horse) sound?.whinny(); else if (bike) bikeHorn(); },
     configure(restore = true): void {
       if (horse) {

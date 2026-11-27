@@ -1,3 +1,6 @@
+/** The default "Hoof sound" slider setting, kept independent of the motor default in engine-sound.ts. */
+export const DEFAULT_HOOF_VOLUME = .7;
+
 /** Short filtered noise and resonators, with no downloaded recordings or motor sounds. */
 export class HorseSound {
   /** A multiple of the hooves' own loudness, from the "Hoof sound" setting (1 at its default). */

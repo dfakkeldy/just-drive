@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 const root = resolve(import.meta.dirname, '..'), dir = mkdtempSync(`${tmpdir()}/mmm-engine-sound-`);
 // The files the check reads as text (its wiring pins); the copy under `dir` is its root.
-const READS = ['engine-sound.ts', 'main.ts', 'radio.ts', 'vehicle.ts'];
+const READS = ['engine-sound.ts', 'main.ts', 'radio.ts', 'ride-features.ts', 'vehicle.ts'];
 const R = 'engine-sound-rules', G = 'engine-sound', survived = [];
 // [name, anchor, replacement, file under web/src]
 const mutants = [
@@ -45,6 +45,7 @@ const mutants = [
   ['always glide, even on a new vehicle', 'fresh ? param.setValueAtTime(value, t) : param.setTargetAtTime(value, t, GLIDE)', 'param.setTargetAtTime(value, t, GLIDE)', G],
   ['jump only on the first drive', 'fresh = kind !== this.kind;', 'fresh = !this.kind;', G],
   ['only the truck sets its octave-up gain', '      g.upperGain?.gain.setValueAtTime(p.upper ?? UPPER, t);\n', "      if (p.wave === 'custom') g.upperGain?.gain.setValueAtTime(p.upper ?? UPPER, t);\n", G],
+  ['the old default engine volume', 'export const DEFAULT_ENGINE_VOLUME = .25;', 'export const DEFAULT_ENGINE_VOLUME = .7;', G],
   ['a sub oscillator', "upper = a.createOscillator(); upper.type = 'triangle';", "upper = a.createOscillator(); upper.type = 'triangle'; a.createOscillator();", G],
 ];
 const source = file => resolve(root, `web/src/${file}.ts`);

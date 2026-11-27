@@ -263,7 +263,6 @@
     {
       "dial": "94.9",
       "name": "THE PARTY LINE",
-      "start": true,
       "tracks": [
         {
           "source": "talk-ident-1",
@@ -1398,6 +1397,7 @@
     {
       "dial": "103.5",
       "name": "THE LONG WAY ROUND",
+      "start": true,
       "tracks": [
         {
           "source": "where-two-rivers-meet",
@@ -1684,5 +1684,5 @@
       ]
     }
   ],
-  "just_start": "94.9"
+  "just_start": "103.5"
 }

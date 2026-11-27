@@ -44,7 +44,8 @@ await send('Page.addScriptToEvaluateOnNewDocument', { source: `(()=>{
   };
 })();` });
 
-async function load(extra) {
+async function load(extra, clearStorage = true) {
+  if (clearStorage) await read(`try{localStorage.clear()}catch{}`).catch(() => {});
   const url = new URL(first);
   url.searchParams.set('hud', '1'); url.searchParams.set('title', '1'); url.searchParams.set('radio', '0');
   for (const [k, v] of Object.entries(extra)) url.searchParams.set(k, v);
@@ -77,7 +78,9 @@ for (const [detail, touch] of [['high', false], ['low', true]]) {
   let s = await note('loaded');
   check(s && s.context === 'none' && s.contexts.length === 0, 'no audio context before any input');
   // Other game sounds (yard dog, towing, road scene) make their own contexts at the tap; the engine's is the one with the noise loop.
-  check(await read(`!!document.querySelector('#engineVolume input[type=range]')`), 'Settings has the Engine sound slider');
+  const sliderVal = await read(`document.querySelector('#engineVolume input[type=range]')?.value ?? null`);
+  check(sliderVal === '0.25', `Settings has the Engine sound slider at default 0.25 (got ${sliderVal})`);
+  check(s.volume === .25, `fresh player engine volume defaults to 0.25 (got ${s.volume})`);
   check(s.low === (detail === 'low'), `the engine knows the detail level (${s.low})`);
 
   // A real mouse tap on the title's start button: the gesture that a phone needs. The context exists, but no engine runs
@@ -100,7 +103,7 @@ for (const [detail, touch] of [['high', false], ['low', true]]) {
   for (let i = 0; i < 40; i++) { await sleep(150); const now = await snap(); if (now.rpm > top.rpm || now.gear > top.gear) top = { ...top, ...now }; if (now.gear >= 2) break; }
   const moving = await note('accelerating');
   check(moving.speed > 2, `the car moves (${moving.speed} m/s)`);
-  check(moving.master > .2, `the engine is audible in the graph (master ${moving.master})`);
+  check(moving.master > .1 && moving.master < .2, `the engine is audible at the lower default (master ${moving.master})`);
   check(top.gear >= 2 || top.rpm > start.rpm, `the engine follows the car (gear ${top.gear}, ${top.rpm} rpm)`);
   check(moving.frequency > 20 && moving.frequency < 400, `the voice sits at the firing frequency (${moving.frequency} Hz)`);
 
@@ -122,7 +125,7 @@ for (const [detail, touch] of [['high', false], ['low', true]]) {
   await read(`(()=>{const s=document.querySelector('#engineVolume input');s.value='0';s.dispatchEvent(new Event('input'));})()`);
   check(await until(`mmm.engineSound.snapshot.master < .01`), 'the slider turns the engine down');
   check(await read(`localStorage.getItem('mmm.engine.vol') === '0'`), 'the volume is kept');
-  await read(`(()=>{const s=document.querySelector('#engineVolume input');s.value='0.7';s.dispatchEvent(new Event('input'));})()`);
+  await read(`(()=>{const s=document.querySelector('#engineVolume input');s.value='0.25';s.dispatchEvent(new Event('input'));})()`);
   await key('keyUp', 'KeyW', 'w');
 
   // The pause key (P): the pause screen suspends the engine; P again resumes it.
@@ -167,10 +170,16 @@ for (const [detail, touch] of [['high', false], ['low', true]]) {
   check(truck.wave === 'custom', `the truck's voice is a periodic wave (type ${truck.wave})`);
   check(best.error < .1, `the snapshot reports the truck's firing rate (${best.frequency} Hz at ${best.rpm} rpm, target ${best.target.toFixed(1)} Hz)`);
   check(truck.frequency > 20 && truck.frequency < 400, `the truck's firing frequency is in range (${truck.frequency} Hz)`);
-  check(truck.master > .2 && truck.speed > 1, `the truck moves and its engine is audible in the graph (master ${truck.master}, ${truck.speed} m/s)`);
+  check(truck.master > .1 && truck.master < .2 && truck.speed > 1, `the truck moves and its engine is audible at the lower default (master ${truck.master}, ${truck.speed} m/s)`);
   const engines = truck.contexts.filter(c => c.buffers > 0);
   check(engines.length === 1 && engines[0].tones === 3, `the truck adds no oscillator (${engines[0]?.tones})`);
   await key('keyUp', 'KeyW', 'w');
+  // A saved engine volume still wins over the default on a later visit.
+  await read(`localStorage.setItem('mmm.engine.vol', '0.65')`);
+  await load({ q: 'low' }, false);
+  const kept = await snap(), keptSlider = await read(`document.querySelector('#engineVolume input[type=range]')?.value ?? null`);
+  check(kept.volume === .65 && keptSlider === '0.65', `saved engine volume wins on reload (volume ${kept.volume}, slider ${keptSlider})`);
+  await read(`localStorage.clear()`);
   assertHealthy();
 }
 
