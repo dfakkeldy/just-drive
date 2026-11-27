@@ -67,6 +67,12 @@
       "roads": [
         "Reynolds Street"
       ]
+    },
+    "industrial-park-road": {
+      "label": "Industrial Park Road",
+      "roads": [
+        "Industrial Park Road"
+      ]
     }
   },
   "overrides": {
@@ -1395,6 +1401,68 @@
       "wall": "#c5d0d6",
       "roof": "#5a6166",
       "trim": "#f4f6f8",
+      "roofMaterial": "shingle"
+    },
+    "328": {
+      "group": "industrial-park-road",
+      "road": "Industrial Park Road",
+      "at": [
+        628994.8,
+        5052153.0
+      ],
+      "wall": "#e6e2d8",
+      "roof": "#555b60",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "212": {
+      "group": "industrial-park-road",
+      "road": "Industrial Park Road",
+      "at": [
+        629000.1,
+        5052140.3
+      ],
+      "wall": "#cbb892",
+      "roof": "#454b50",
+      "trim": "#f3efe6",
+      "door": "#ababa5",
+      "roofMaterial": "shingle"
+    },
+    "243": {
+      "group": "industrial-park-road",
+      "road": "Industrial Park Road",
+      "at": [
+        629007.0,
+        5052168.5
+      ],
+      "wall": "#dcc9a4",
+      "roof": "#6e7478",
+      "trim": "#f6f3ea",
+      "roofMaterial": "shingle"
+    },
+    "366": {
+      "group": "industrial-park-road",
+      "road": "Industrial Park Road",
+      "at": [
+        629023.8,
+        5052163.5
+      ],
+      "wall": "#5d6d7e",
+      "roof": "#3c4248",
+      "trim": "#f4f6f8",
+      "roofMaterial": "shingle"
+    },
+    "378": {
+      "group": "industrial-park-road",
+      "road": "Industrial Park Road",
+      "at": [
+        629039.4,
+        5052203.9
+      ],
+      "wall": "#c5d6e4",
+      "roof": "#3a4146",
+      "trim": "#f7f8f8",
+      "door": "#787a76",
       "roofMaterial": "shingle"
     }
   }
