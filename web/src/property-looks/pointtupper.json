@@ -79,6 +79,12 @@
       "roads": [
         "Embree Island Road"
       ]
+    },
+    "highway-104": {
+      "label": "Highway 104",
+      "roads": [
+        "Highway 104"
+      ]
     }
   },
   "overrides": {
@@ -1481,6 +1487,70 @@
       "wall": "#d2cdc3",
       "roof": "#4a5056",
       "trim": "#f6f5f2",
+      "roofMaterial": "shingle"
+    },
+    "455": {
+      "group": "highway-104",
+      "road": "Highway 104",
+      "at": [
+        623528.0,
+        5056289.0
+      ],
+      "wall": "#3d6d8c",
+      "roof": "#c5ccd0",
+      "trim": "#e7eef2",
+      "door": "#e8e7e0",
+      "roofMaterial": "shingle"
+    },
+    "484": {
+      "group": "highway-104",
+      "road": "Highway 104",
+      "at": [
+        623552.3,
+        5056263.5
+      ],
+      "wall": "#3d6d8c",
+      "roof": "#c5ccd0",
+      "trim": "#e7eef2",
+      "door": "#dedfd8",
+      "roofMaterial": "shingle"
+    },
+    "3017": {
+      "group": "highway-104",
+      "road": "Highway 104",
+      "at": [
+        623633.2,
+        5056156.2
+      ],
+      "wall": "#2f4a62",
+      "roof": "#3e4854",
+      "trim": "#d5dde4",
+      "door": "#dedfd8",
+      "roofMaterial": "shingle"
+    },
+    "167": {
+      "group": "highway-104",
+      "road": "Highway 104",
+      "at": [
+        624231.5,
+        5056038.3
+      ],
+      "wall": "#b4333c",
+      "roof": "#3a4044",
+      "trim": "#f4f2ec",
+      "door": "#a2a5a0",
+      "roofMaterial": "shingle"
+    },
+    "465": {
+      "group": "highway-104",
+      "road": "Highway 104",
+      "at": [
+        624260.1,
+        5056016.4
+      ],
+      "wall": "#e4d07a",
+      "roof": "#5c4638",
+      "trim": "#f6f4ee",
       "roofMaterial": "shingle"
     }
   }
