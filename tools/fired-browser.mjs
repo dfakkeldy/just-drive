@@ -5,7 +5,23 @@
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { cdp, cdpFetch, sleep } from './cdp.mjs';
+import { layoutFaults } from './hud-layout-geometry.mjs';
 const [out, first] = process.argv.slice(2), port = process.env.CDP_PORT;
+// Local multiplayer room stand-in with chat, race and room games enabled so #mpCards holds all three panels.
+const mpRoomScript = `
+try { localStorage.setItem('mmm.mp','1'); localStorage.removeItem('mmm.mp.room'); } catch {}
+const NativeSocket = window.WebSocket;
+window.WebSocket = function(url, ...args) {
+  if (!String(url).includes('/mp/v1/')) return new NativeSocket(url, ...args);
+  const socket = { readyState: 1, binaryType: 'arraybuffer', send(){}, close(){ this.readyState = 3; }, onopen: null, onclose: null, onerror: null, onmessage: null };
+  setTimeout(() => {
+    socket.onmessage?.({ data: JSON.stringify({ t: 'hello', v: 1, id: 1, name: 'Dan', hue: 0, room: 'world', cap: 24, chat: true, games: true, heartbeat: true, rides: true, heights: true, peers: [] }) });
+    socket.onmessage?.({ data: JSON.stringify({ t: 'race', now: performance.now(), state: { host: 1, serial: 1, route: null, startAt: 0, racers: [] } }) });
+    const g = new Uint8Array(13); g[0] = 3; g[1] = 1; g[4] = 1; g[6] = 1;
+    socket.onmessage?.({ data: g.buffer });
+  }, 50);
+  return socket;
+};`;
 const tab = await (await cdpFetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
 const errors = [];
 const c = await cdp(tab.webSocketDebuggerUrl, { deadline: 240000, onEvent: e => {
@@ -129,5 +145,110 @@ try {
   assert.equal(await read('mmm.gameMode'), 'explore');
   assert.equal(await read("!!document.getElementById('modeFired')||!!document.getElementById('firedHud')"), false);
   console.log('PASS Just Drive: no Get Fired');
+
+  // HUD overlap check with multiplayer room panels (#mpCards: Drivers and chat, Room race, Room games)
+  // across desktop (1675x997, 1280x720) and phone (390x844 portrait, 844x390 landscape) in Get Fired, Daily, Mail and Just Drive.
+  const desktopIds = ['hud', 'shiftHud', 'miniMap', 'relief', 'radio', 'photoTag', 'mailCard', 'endShift', 'pauseButton', 'placesButton', 'bigMapButton', 'gear', 'credit', 'mailButton', 'cameraButton', 'firedHud', 'mpCards', 'mpChip', 'placeArrival', 'droneHints'];
+  const phoneIds = ['phoneLine', 'firedLine', 'raceReadout', 'gameReadout', 'hud', 'shiftHud', 'stopHint', 'miniMap', 'relief', 'radio', 'photoTag', 'gear', 'pauseButton', 'placesButton', 'droneButton', 'savePictureButton', 'tcReset', 'tcView', 'tcHorn', 'tcTrack', 'tcBrake', 'tcGo', 'cameraButton', 'mailButton', 'firedHud', 'mpCards'];
+  const collectBoxes = ids => read(`(() => {
+    const visible = e => {
+      if (!e || e.hidden || e.classList.contains('inPanel')) return false;
+      const s = getComputedStyle(e), b = e.getBoundingClientRect();
+      if (s.display === 'none' || s.visibility === 'hidden' || b.width < 2 || b.height < 2) return false;
+      for (let p = e.parentElement; p; p = p.parentElement) if (p.hidden || getComputedStyle(p).display === 'none' || getComputedStyle(p).visibility === 'hidden') return false;
+      return true;
+    };
+    return ${JSON.stringify(ids)}.flatMap(id => {
+      const e = document.getElementById(id);
+      if (!visible(e)) return [];
+      const b = e.getBoundingClientRect();
+      return [[id, b.left, b.top, b.right, b.bottom]];
+    });
+  })()`);
+  const mpScript = await c.send('Page.addScriptToEvaluateOnNewDocument', { source: mpRoomScript });
+  const openMp = async (w, h, phone, query, host = '127.0.0.1') => {
+    await c.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: phone });
+    const url = new URL(`/?x=1&title=1&hud=1&radio=0&res=1&scene=0&day=1&run=1&mp=1&${phone ? 'touch=1&q=low&' : ''}${query}`, first); url.hostname = host;
+    await c.send('Page.navigate', { url: url.href });
+    let ready = false;
+    for (let i = 0; i < 360 && !ready; i++) { await sleep(500); ready = await read("document.documentElement.dataset.mmmReady === 'true' && !!window.mmm?.shift"); }
+    assert.equal(ready, true, `Mabou settles (${query} ${w}x${h})`);
+    await read("if (!document.getElementById('title').hidden) { document.getElementById('titleStart').click(); document.activeElement?.blur(); }");
+    for (let i = 0; i < 60; i++) {
+      if (await read("mmm.mp?.current?.net?.status === 'on' && !!document.getElementById('mpSocial') && !!document.getElementById('racePanel') && !!document.getElementById('gamePanel') && !document.getElementById('gamePanel').hidden")) break;
+      await sleep(200);
+    }
+    await sleep(700);
+  };
+  try {
+    // Desktop: Get Fired & Daily at 1675x997 and 1280x720 (driving with photoTag, and drone flying).
+    for (const [label, query] of [['fired', 'mode=fired'], ['daily', 'daily=1']]) {
+      await openMp(1675, 997, false, query);
+      // Score one step so #firedHud shows ladder progress and orange bar, and take a photo so #photoTag participates.
+      await read("mmm.shift.reportScore('lawnMail', mmm.vehicle.x, mmm.vehicle.z, 5); mmm.shift.reportScore('box:down', mmm.vehicle.x, mmm.vehicle.z, 12); document.getElementById('cameraButton').click()");
+      await sleep(700);
+      for (const [w, h] of [[1675, 997], [1280, 720]]) {
+        await c.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+        await sleep(700);
+        const driveBoxes = await collectBoxes(desktopIds);
+        assert.ok(driveBoxes.some(b => b[0] === 'mpCards') && driveBoxes.some(b => b[0] === 'firedHud'), `${label} ${w}x${h} drive: both mpCards and firedHud visible`);
+        if (label === 'fired') await shot(`fired-mp-${w}x${h}-drive`);
+        assert.deepEqual(layoutFaults(driveBoxes, w, h), [], `${label} ${w}x${h} drive: no HUD overlap`);
+        // Launch drone (hides mail/camera buttons) and check both with and without droneHints.
+        await c.send('Input.dispatchKeyEvent', { type: 'keyDown', code: 'KeyF', key: 'f', windowsVirtualKeyCode: 70 });
+        await c.send('Input.dispatchKeyEvent', { type: 'keyUp', code: 'KeyF', key: 'f', windowsVirtualKeyCode: 70 });
+        await sleep(700);
+        assert.equal(await read("document.body.classList.contains('droneOn')"), true, `${label} ${w}x${h}: drone active`);
+        const droneHintBoxes = await collectBoxes(desktopIds);
+        await read("const h=document.getElementById('droneHints'); if(h) h.style.display='none';");
+        await sleep(700);
+        const droneBoxes = await collectBoxes(desktopIds);
+        if (label === 'fired') await shot(`fired-mp-${w}x${h}-drone`);
+        await read("const h=document.getElementById('droneHints'); if(h) h.style.display='';");
+        assert.deepEqual(layoutFaults(droneHintBoxes, w, h), [], `${label} ${w}x${h} drone (with hints): no HUD overlap`);
+        assert.deepEqual(layoutFaults(droneBoxes, w, h), [], `${label} ${w}x${h} drone: no HUD overlap`);
+        await c.send('Input.dispatchKeyEvent', { type: 'keyDown', code: 'KeyF', key: 'f', windowsVirtualKeyCode: 70 });
+        await c.send('Input.dispatchKeyEvent', { type: 'keyUp', code: 'KeyF', key: 'f', windowsVirtualKeyCode: 70 });
+        await sleep(600);
+      }
+    }
+    // Desktop: Mail (Ride-along) and Just Drive at 1675x997 and 1280x720.
+    for (const [label, query, host] of [['mail', 'mode=mail&rideAlong=1', '127.0.0.1'], ['just', 'site=just&mode=explore', 'localhost']]) {
+      await openMp(1675, 997, false, query, host);
+      if (label === 'mail') await read("document.getElementById('cameraButton').click()");
+      else await read("const p=mmm.places?.marks?.[0]; if(p){mmm.vehicle.place(p.x,p.z,0);mmm.vehicle.vx=mmm.vehicle.vz=mmm.vehicle.speed=0;}");
+      await sleep(700);
+      for (const [w, h] of [[1675, 997], [1280, 720]]) {
+        await c.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+        await sleep(700);
+        const boxes = await collectBoxes(desktopIds);
+        assert.ok(boxes.some(b => b[0] === 'mpCards'), `${label} ${w}x${h}: mpCards visible`);
+        assert.deepEqual(layoutFaults(boxes, w, h), [], `${label} ${w}x${h}: no HUD overlap`);
+      }
+    }
+    // Phone: 390x844 portrait and 844x390 landscape across Get Fired, Daily, Mail and Just Drive with multiplayer.
+    for (const [label, query, host] of [['fired', 'mode=fired', '127.0.0.1'], ['daily', 'daily=1', '127.0.0.1'], ['mail', 'mode=mail&rideAlong=1', '127.0.0.1'], ['just', 'site=just&mode=explore', 'localhost']]) {
+      for (const [w, h] of [[390, 844], [844, 390]]) {
+        await openMp(w, h, true, query, host);
+        if (label === 'fired' || label === 'daily') {
+          // Activate a live race readout alongside #phoneLine and #firedLine to prove all three fit without clipping or overlap.
+          await read(`(() => {
+            const m = mmm.mp.current;
+            m.net.race = { host: 1, serial: 2, route: { roadId: m.host?.roads?.[0]?.id ?? 1, gates: [{ x: mmm.vehicle.x, z: mmm.vehicle.z }, { x: mmm.vehicle.x + 50, z: mmm.vehicle.z }, { x: mmm.vehicle.x + 100, z: mmm.vehicle.z }] }, startAt: performance.now() + 5000, racers: [{ id: 1, next: 0, time: null, out: false }] };
+            m.race.update();
+          })()`);
+          await sleep(250);
+          assert.ok(await read("(() => { const s = document.getElementById('phoneStatus'); return s.scrollHeight <= s.clientHeight + 1; })()"), `${label} phone ${w}x${h}: phoneStatus holds fired + race lines without clipping`);
+        }
+        const boxes = await collectBoxes(phoneIds);
+        assert.equal(boxes.some(b => b[0] === 'mpCards' || b[0] === 'firedHud'), false, `${label} phone ${w}x${h}: desktop overlays hidden`);
+        if (label === 'fired') await shot(`fired-mp-phone-${w}x${h}`);
+        assert.deepEqual(layoutFaults(boxes, w, h), [], `${label} phone ${w}x${h}: no HUD overlap`);
+      }
+    }
+    console.log('PASS multiplayer HUD overlap check: 1675x997, 1280x720, 390x844 and 844x390 across Get Fired, Daily, Mail and Just Drive');
+  } finally {
+    await c.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: mpScript.identifier }).catch(() => {});
+  }
   assert.deepEqual(errors, [], 'runtime exceptions');
 } finally { c.close(); await cdpFetch(`http://127.0.0.1:${port}/json/close/${tab.id}`).catch(() => {}); }

@@ -57,6 +57,7 @@ export class Multiplayer {
   private readonly visibility = () => this.net.setVisible(!document.hidden);
   private readonly pagehide = () => this.net.stop();
   private readonly pageshow = (event: PageTransitionEvent) => { if (event.persisted) location.reload(); };
+  private readonly resize = () => { this.chipFit = 0; };
   private readonly heartbeatTimer: ReturnType<typeof setInterval>;
 
   constructor(private readonly host: MultiplayerHost, code: string | null) {
@@ -70,6 +71,7 @@ export class Multiplayer {
     document.addEventListener('visibilitychange', this.visibility);
     window.addEventListener('pagehide', this.pagehide);
     window.addEventListener('pageshow', this.pageshow);
+    window.addEventListener('resize', this.resize);
     this.heartbeatTimer = setInterval(() => this.net.heartbeat(), 20000);
     this.race = new RaceView(this.net,host);
     // All room cards share one ordered column.
@@ -164,7 +166,7 @@ export class Multiplayer {
     this.chip.style.top = 'calc(env(safe-area-inset-top,0px) + 6px)';
     const box = this.chip.getBoundingClientRect();
     let top = box.top;
-    const readouts = ['hud', 'gear', 'shiftHud', 'stopHint', 'miniMap', 'radio', 'photoTag', 'pauseButton', 'placesButton', 'endShift', 'gameResults'];
+    const readouts = ['hud', 'gear', 'shiftHud', 'stopHint', 'miniMap', 'radio', 'photoTag', 'pauseButton', 'placesButton', 'bigMapButton', 'endShift', 'gameResults'];
     // A wide development HUD can reach past the centre. Keep the chip centred, below that HUD.
     for (let pass = 0; pass < readouts.length; pass++) {
       let next = top;
@@ -190,6 +192,7 @@ export class Multiplayer {
     document.removeEventListener('visibilitychange', this.visibility);
     window.removeEventListener('pagehide', this.pagehide);
     window.removeEventListener('pageshow', this.pageshow);
+    window.removeEventListener('resize', this.resize);
     this.social?.dispose();
     this.race.dispose();
     this.games.dispose();

@@ -86,8 +86,8 @@ export function fitRoomCards(): void {
   home.style.right = ''; home.style.width = '';
   const box = home.getBoundingClientRect();
   const credit = document.getElementById('credit')?.getBoundingClientRect();
-  const topBlocks = ['hud','shiftHud','miniMap','radio','pauseButton','placesButton','gear','endShift','mpChip','gameResults','droneHints','photoTag'];
-  const bottomBlocks = ['mailButton','cameraButton','placeArrival'];
+  const topBlocks = ['hud','shiftHud','miniMap','radio','pauseButton','placesButton','bigMapButton','gear','endShift','mpChip','gameResults','droneHints','photoTag'];
+  const bottomBlocks = ['mailButton','cameraButton','placeArrival','firedHud','mailCard','tripHud'];
   const visible = (id: string) => {
     const e = document.getElementById(id), b = e && !e.hidden && !e.classList.contains('inPanel') ? e.getBoundingClientRect() : null;
     return b?.width && b.height ? b : null;
@@ -101,10 +101,10 @@ export function fitRoomCards(): void {
   };
   let { top, bottom } = bounds(box);
   if (bottom - top < 180) {
-    let right = box.right;
-    for (const b of below) if (b && b.left < box.right && b.right > box.left) right = Math.min(right, b.left - 10);
-    if (right < box.right) {
-      // On a short desktop, a narrower column can also clear the left HUD.
+    const candidates = [...new Set(below.filter((b): b is DOMRect => !!b && b.left < box.right && b.right > box.left).map(b => b.left - 10))]
+      .filter(r => r < box.right).sort((a, b) => b - a);
+    for (const right of candidates) {
+      // On a short desktop, shifting left of lower overlays (and narrowing if needed) clears both sides.
       for (const width of [box.width, Math.min(240, box.width)]) {
         if (right - width < 10) continue;
         const fit = bounds({ left: right - width, right });
@@ -112,6 +112,7 @@ export function fitRoomCards(): void {
         home.style.right = `${innerWidth - right}px`; home.style.width = `${width}px`;
         ({ top, bottom } = fit);
       }
+      if (bottom - top >= 180) break;
     }
   }
   home.style.bottom = `${innerHeight - bottom}px`;
