@@ -191,8 +191,17 @@ globalThis.fetch=async url=>{requests.push(url);if(failing){failing=false;throw 
 const layer=new Paved(index,'test',[628151.016,5052750.5],()=>time);
 const flush=async()=>{for(let i=0;i<30;i++)await new Promise(resolve=>setImmediate(resolve));};
 try{
+ assert.equal(layer.lotClassAt(0,0),0,'lotClassAt before first update on unmapped tile');
+ assert.equal(layer.lotClassAt(629644+3*2+1-628151.016,5052750.5-(5051364-7*2-1)),-1,'lotClassAt before first update on mapped tile is pending (-1)');
+ assert.deepEqual(layer.lotGrid(),{
+  ox:index.origin[0]-628151.016,
+  oz:5052750.5-index.origin[1],
+  step:2,
+ },'lotGrid exposes exact index origin before first update');
  // Tile 149_203 is E629644..629900, N5051108..5051364; car at its centre.
- layer.update(629772-628151.016,5052750.5-5051236);await flush();
+ layer.update(629772-628151.016,5052750.5-5051236);
+ assert.equal(layer.lotClassAt(629644+3*2+1-628151.016,5052750.5-(5051364-7*2-1)),-1,'lotClassAt while mapped tile is in flight is pending (-1)');
+ await flush();
  assert.equal(requests.length,1,'tile name/world row sign');assert.ok(requests[0].endsWith('/149_203.r8'),'tile name');
  const a=layer.texture.image.data;assert.equal(layer.railTexture,undefined,'removed lane guard has no obsolete texture');
  const red=(r,c)=>a[((256+r)*640+256+c)*2],green=(r,c)=>a[((256+r)*640+256+c)*2+1];
@@ -201,11 +210,24 @@ try{
  assert.equal(green(125,2),255,'gravel channel');assert.equal(red(125,2),0,'gravel channel');assert.equal(green(7,3),0,'gravel channel');
  assert.equal(a[(256*640+256)*2],0,'atlas orientation empty corner');assert.equal(red(120,94),0,'atlas orientation transpose');
  assert.equal(a.reduce((n,v)=>n+v,0),765,'atlas orientation count');assert.equal(layer.texture.minFilter,1006);
+ assert.deepEqual(layer.lotGrid(),{
+  ox:index.origin[0]+147*256-628151.016,
+  oz:5052750.5-index.origin[1]+201*256,
+  step:2,
+ },'lotGrid reports exact world origin and 2 m cell size after update');
+ assert.equal(layer.lotClassAt(629644+3*2+1-628151.016,5052750.5-(5051364-7*2-1)),1,'lotClassAt reads asphalt class 1');
+ assert.equal(layer.lotClassAt(629644+120*2+1-628151.016,5052750.5-(5051364-94*2-1)),1,'lotClassAt reads second asphalt cell');
+ assert.equal(layer.lotClassAt(629644+2*2+1-628151.016,5052750.5-(5051364-125*2-1)),2,'lotClassAt reads gravel class 2');
+ assert.equal(layer.lotClassAt(629644+1-628151.016,5052750.5-(5051364-1)),0,'lotClassAt reads empty cell as 0');
  const reads=requests.length;for(let i=0;i<10000;i++)layer.update(1621, 1515);assert.equal(requests.length,reads);
  layer.update(30000,30000);assert.equal(layer.entries.size,0);assert.ok(layer.texture.image.data.every(v=>v===0));
+ assert.equal(layer.lotClassAt(629644+3*2+1-628151.016,5052750.5-(5051364-7*2-1)),-1,'lotClassAt marks evicted mapped tile as unloaded (-1)');
+ assert.equal(layer.lotClassAt(30000,30000),0,'lotClassAt returns 0 on unmapped tile');
  failing=true;console.warn=()=>{};layer.update(629772-628151.016,5052750.5-5051236);await flush();const before=requests.length;
+ assert.equal(layer.lotClassAt(629644+3*2+1-628151.016,5052750.5-(5051364-7*2-1)),-1,'lotClassAt stays pending (-1) after failed fetch');
  layer.update(1621,1515);await flush();assert.equal(requests.length,before,'retry must back off');
  time=1001;layer.update(1621,1515);await flush();assert.equal(requests.length,before+1,'retry resumes in same tile');assert.equal(layer.pending,0);assert.equal(layer.entries.values().next().value.failed,false);
+ assert.equal(layer.lotClassAt(629644+3*2+1-628151.016,5052750.5-(5051364-7*2-1)),1,'lotClassAt recovers class 1 after retry');
 }finally{globalThis.fetch=oldFetch;console.warn=oldWarn;layer.texture.dispose();}
 // Put asphalt on both sides of the scope boundary so a loose clip cannot pass.
 {

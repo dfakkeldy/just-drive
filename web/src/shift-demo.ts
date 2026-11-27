@@ -1,4 +1,5 @@
 import type { Building } from './buildings';
+import { isTerrainLawn } from './ruts';
 import type { Terrain } from './terrain';
 import type { Vehicle } from './vehicle';
 
@@ -20,7 +21,7 @@ export class LawnDemo {
       let clear = true;
       for (let step = -12; step <= 20; step += 2) {
         const x = cx + fx * step, z = cz + fz * step, s = terrain.surfaceAt(x, z);
-        if (!s || s.level < 8 || s.canopy >= 1.6 || s.roadDist <= s.halfWidth + 1 || s.ground < 1) { clear = false; break; }
+        if (!s || s.level < 8 || !isTerrainLawn(terrain, s, x, z, 1) || s.ground < 1) { clear = false; break; }
       }
       if (clear) {
         vehicle.place(cx - fx * 12, cz - fz * 12, Math.atan2(fx, -fz),vehicle.y); vehicle.speed = vehicle.steerAngle = 0; this.ready = true; return true;

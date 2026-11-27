@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildingSites, type Building } from './buildings';
+import { MOWN_LAWN, lawnReach } from './ruts';
 import type { Props, MailContact } from './props';
 import type { Terrain } from './terrain';
 import type { Vehicle } from './vehicle';
@@ -230,8 +231,14 @@ export class Mail {
   private miss(p: Piece): void {
     const s = this.terrain.surfaceAt(p.x, p.z,p.y);
     let lawn = false;
-    if (!s || s.roadDist > s.halfWidth + .3) for (const house of this.houses) {
-      if ((p.x - house.x) ** 2 + (p.z - house.z) ** 2 <= 40 ** 2) { lawn = true; break; }
+    const confirmedLot = (this.terrain.paved?.lotClassAt?.(p.x, p.z) ?? 0) > 0;
+    // Ordinary grass preserves its existing 40 m range, 0.3 m road margin, canopy, missing-sample fallback, and
+    // coarse-level / pre-load paved behavior; kind-12 mown lawns extend to 60 m and respect lot/surface exclusions.
+    const onLawn = !confirmedLot && (!s || (!s.deck && !s.water && !s.mineral && !s.lotAsphalt
+      && (s.kind === MOWN_LAWN || s.roadDist > s.halfWidth + .3)));
+    const reach = Math.max(40, lawnReach(s?.kind)) ** 2;
+    if (onLawn) for (const house of this.houses) {
+      if ((p.x - house.x) ** 2 + (p.z - house.z) ** 2 <= reach) { lawn = true; break; }
     }
     this.service?.ground(p.x, p.z, lawn);
     if (lawn) { this.lawn++; this.say(LAWN[this.lawn % LAWN.length]); }
