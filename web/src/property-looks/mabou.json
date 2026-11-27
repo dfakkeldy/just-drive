@@ -5164,6 +5164,7 @@
       "wall": "#9ca2a6",
       "roof": "#787e84",
       "trim": "#e4e6e4",
+      "door": "#a8a18d",
       "roofMaterial": "metal"
     },
     "626": {
@@ -5188,6 +5189,7 @@
       "wall": "#dadcd9",
       "roof": "#787e84",
       "trim": "#ecebe6",
+      "door": "#adada7",
       "roofMaterial": "metal"
     },
     "1475": {
@@ -5221,17 +5223,12 @@
         630654.5,
         5109374.1
       ],
-      "kind": "house",
       "wall": "#eeede7",
       "roof": "#4a4e52",
       "trim": "#f5f4ef",
+      "door": "#702e26",
       "roofMaterial": "shingle",
-      "storeys": 1,
-      "skirting": true,
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
+      "skirting": true
     },
     "843": {
       "group": "blackstone-and-mull-river",
@@ -5240,10 +5237,10 @@
         630782.5,
         5109423.5
       ],
-      "wall": "#a7adb0",
-      "roof": "#666c70",
-      "trim": "#e8e7e0",
-      "door": "#6a302a",
+      "wall": "#6f4539",
+      "roof": "#7e584c",
+      "trim": "#d8d4ca",
+      "door": "#685948",
       "roofMaterial": "metal"
     },
     "879": {
@@ -5256,6 +5253,7 @@
       "wall": "#5b6064",
       "roof": "#505458",
       "trim": "#f2f1ec",
+      "door": "#8f826b",
       "roofMaterial": "shingle"
     },
     "880": {
@@ -5268,6 +5266,7 @@
       "wall": "#5b6064",
       "roof": "#505458",
       "trim": "#f2f1ec",
+      "door": "#404241",
       "roofMaterial": "shingle"
     },
     "888": {
@@ -5280,12 +5279,7 @@
       "wall": "#e6e4d8",
       "roof": "#8c908b",
       "trim": "#f2f1ea",
-      "roofMaterial": "metal",
-      "roofShape": "gable",
-      "storeys": 1,
-      "entrance": "none",
-      "chimney": false,
-      "shutters": false
+      "roofMaterial": "shingle"
     },
     "892": {
       "group": "blackstone-and-mull-river",
@@ -5294,9 +5288,10 @@
         630818.4,
         5109438.8
       ],
-      "wall": "#6f4539",
-      "roof": "#7e584c",
-      "trim": "#d8d4ca",
+      "wall": "#a7adb0",
+      "roof": "#666c70",
+      "trim": "#e8e7e0",
+      "door": "#6a302a",
       "roofMaterial": "metal"
     },
     "1211": {
@@ -5309,8 +5304,7 @@
       "wall": "#833d32",
       "roof": "#424648",
       "trim": "#f2f0e8",
-      "roofMaterial": "shingle",
-      "storeys": 2
+      "roofMaterial": "shingle"
     },
     "1427": {
       "group": "blackstone-and-mull-river",
@@ -5322,7 +5316,7 @@
       "wall": "#e6e5de",
       "roof": "#9aa09f",
       "trim": "#f0efe8",
-      "roofMaterial": "metal"
+      "roofMaterial": "shingle"
     },
     "1435": {
       "group": "blackstone-and-mull-river",
@@ -5346,6 +5340,7 @@
       "wall": "#983b34",
       "roof": "#9ea4a4",
       "trim": "#ecebe4",
+      "door": "#ababa5",
       "roofMaterial": "metal"
     },
     "1536": {
@@ -5355,11 +5350,10 @@
         627254.4,
         5104084.5
       ],
-      "wall": "#f1f0ea",
-      "roof": "#65615c",
-      "trim": "#f7f6f1",
-      "roofMaterial": "shingle",
-      "storeys": 2
+      "wall": "#eae9e3",
+      "roof": "#825c51",
+      "trim": "#f3f2ec",
+      "roofMaterial": "metal"
     },
     "1588": {
       "group": "blackstone-and-mull-river",
@@ -5371,6 +5365,19 @@
       "wall": "#e6e5de",
       "roof": "#4c5054",
       "trim": "#f4f3ed",
+      "roofMaterial": "shingle"
+    },
+    "930": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627251.1,
+        5104130.7
+      ],
+      "wall": "#f1f0ea",
+      "roof": "#65615c",
+      "trim": "#f7f6f1",
+      "door": "#a19a83",
       "roofMaterial": "shingle"
     }
   }
