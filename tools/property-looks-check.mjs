@@ -6,6 +6,7 @@ import { applyPropertyLookPack, applyPropertyLooks, areaPropertyLooks } from '..
 import { MabouMainSite } from '../web/src/mabou-main-site.ts';
 import { PorchSite } from '../web/src/porch-site.ts';
 import { BlackstoneSite } from '../web/src/blackstone-site.ts';
+import { BrookVillageSite } from '../web/src/brook-village-site.ts';
 import { isHillsideBuilding } from '../web/src/november-buildings.ts';
 import { PH_PLACES } from '../web/src/port-hawkesbury-site.ts';
 
@@ -321,8 +322,9 @@ if (fs.existsSync(`${terrainDir}/manifest.json`)) {
   };
   const porchBox = PorchSite.find(rawBuildings);
   const blackstoneBox = BlackstoneSite.find(rawBuildings);
+  const brookVillageBoxes = BrookVillageSite.find(rawBuildings);
   const afterBuildings = mabouSite.drawn(applied.buildings.filter((b) =>
-    b !== porchBox && b !== blackstoneBox && !isHillsideBuilding(b)));
+    b !== porchBox && b !== blackstoneBox && b !== brookVillageBoxes?.store && b !== brookVillageBoxes?.church && !isHillsideBuilding(b)));
   const afterStyles = { ...bakedStyles, ...applied.styles };
 
   const nextNormal = new Buildings(afterBuildings, manifest.village, 1.5, -0.2, afterStyles);

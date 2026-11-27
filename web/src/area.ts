@@ -27,6 +27,8 @@ export interface Area {
   readonly porch: boolean;
   /** A house on Blackstone Road and its yard (Mabou). */
   readonly blackstone: boolean;
+  /** The Brook Village general store and St. John the Baptist Church on Highway 252 (Mabou). */
+  readonly brookVillage: boolean;
   /** The yard dog's invented driveway (Mabou). */
   readonly yardDog: boolean;
   /** The school bus on its loop, and its stop as a quiet place in room games (Mabou). */
@@ -58,7 +60,7 @@ export interface Area {
 }
 const features = (enabled: boolean) => ({ worksYard: enabled, colliery: enabled, animals: enabled, roadScene: enabled, fishing: enabled, coast: enabled,
   landmarks: enabled, fixedShots: enabled, gulfTint: enabled, fixedSun: enabled, route: enabled, mailTitle: enabled });
-const mabouSites = (enabled: boolean) => ({ mabouMain: enabled, porch: enabled, blackstone: enabled, yardDog: enabled, schoolBus: enabled, hillside: enabled });
+const mabouSites = (enabled: boolean) => ({ mabouMain: enabled, porch: enabled, blackstone: enabled, brookVillage: enabled, yardDog: enabled, schoolBus: enabled, hillside: enabled });
 const pointTupperSites = (enabled: boolean) => ({ hawkesbury: enabled, prince: enabled, airport: enabled, ptInfrastructure: enabled });
 const area = (id: string, name: string): Area => Object.freeze({ id, name, base: id === 'mabou' ? 'terrain' : `areas/${id}`,
   mail: id === 'mabou', ...features(id === 'mabou'), home: id === 'judique', church: id === 'judique', quarry: id === 'westbay',

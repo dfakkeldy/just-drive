@@ -37,12 +37,13 @@ assert.ok(sites.every((b) => b.buildingId === undefined || b.buildingId === b.id
     /^const drLaneBox = .*\? DrLaneSite\.find\(buildingList\) : null;$/,
     /^const princeBox = .*\? PrinceSite\.find\(buildingList\) : null;$/,
     /^const blackstoneBox = .*\? BlackstoneSite\.find\(buildingList\) : null;$/,
+    /^const brookVillageBoxes = .*\? BrookVillageSite\.find\(buildingList\) : null;$/,
     /^const portHoodGasBox = .*\? PortHoodGasSite\.find\(buildingList\) : null;$/,
     // The camera drone keeps over every drawn roof: each wing and block has its own height, and none of them is counted.
-    // The boxes Mabou's main street, Prince Street, Blackstone Road and Port Hood gas station replace are left out; their own roofs come from mabouMain.roofAt, princeSite.roofBoxes, blackstoneSite.roofBoxes and portHoodGasSite.roofBoxes.
-    /^const boxRoofAt = roofHeights\(ERA\.modern && buildingList \? drawnWithout\(mabouSite \? mabouSite\.drawn\(buildingList\) : buildingList, princeBox, blackstoneBox, portHoodGasBox\) : \[\], manifest\.village, EXAG, SEA_LEVEL\);/,
-    // The drawing: less the porch house, the house on D.R.'s Lane, the Prince Street house, the Blackstone Road house, the Port Hood gas station and the places Mabou's main street models (all stay properties).
-    /^const drawnBuildings = buildingList \? drawnWithout\(buildingList, porchBox, drLaneBox, princeBox, blackstoneBox, portHoodGasBox\) : buildingList;$/,
+    // The boxes Mabou's main street, Prince Street, Blackstone Road, Brook Village and Port Hood gas station replace are left out; their own roofs come from mabouMain.roofAt, princeSite.roofBoxes, blackstoneSite.roofBoxes, brookVillageSite.roofBoxes and portHoodGasSite.roofBoxes.
+    /^const boxRoofAt = roofHeights\(ERA\.modern && buildingList \? drawnWithout\(mabouSite \? mabouSite\.drawn\(buildingList\) : buildingList, princeBox, blackstoneBox, brookVillageBoxes\?\.store \?\? null, brookVillageBoxes\?\.church \?\? null, portHoodGasBox\) : \[\], manifest\.village, EXAG, SEA_LEVEL\);/,
+    // The drawing: less the porch house, the house on D.R.'s Lane, the Prince Street house, the Blackstone Road house, Brook Village, the Port Hood gas station and the places Mabou's main street models (all stay properties).
+    /^const drawnBuildings = buildingList \? drawnWithout\(buildingList, porchBox, drLaneBox, princeBox, blackstoneBox, brookVillageBoxes\?\.store \?\? null, brookVillageBoxes\?\.church \?\? null, portHoodGasBox\) : buildingList;$/,
     // The public wharves keep clear of every surveyed footprint, wings included (footprints only, nothing is counted).
     /^const wharves = .*\(buildings \? buildingList \?\? \[\] : \[\]\)\.map\(b => b\.footprint\)\) : null;$/,
     // The yard dog's invented driveway only asks if the list exists. Its houses come from `properties` (next assert).
