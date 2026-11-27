@@ -73,6 +73,12 @@
       "roads": [
         "Industrial Park Road"
       ]
+    },
+    "embree-island-road": {
+      "label": "Embree Island Road",
+      "roads": [
+        "Embree Island Road"
+      ]
     }
   },
   "overrides": {
@@ -1463,6 +1469,18 @@
       "roof": "#3a4146",
       "trim": "#f7f8f8",
       "door": "#787a76",
+      "roofMaterial": "shingle"
+    },
+    "1493": {
+      "group": "embree-island-road",
+      "road": "Embree Island Road",
+      "at": [
+        627410.1,
+        5053482.3
+      ],
+      "wall": "#d2cdc3",
+      "roof": "#4a5056",
+      "trim": "#f6f5f2",
       "roofMaterial": "shingle"
     }
   }
