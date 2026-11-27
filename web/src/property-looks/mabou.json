@@ -5153,6 +5153,225 @@
       "chimney": false,
       "dormer": false,
       "shutters": false
+    },
+    "52": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        630469.9,
+        5110298.3
+      ],
+      "wall": "#9ca2a6",
+      "roof": "#787e84",
+      "trim": "#e4e6e4",
+      "roofMaterial": "metal"
+    },
+    "626": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        630410.9,
+        5110301.2
+      ],
+      "wall": "#7e8992",
+      "roof": "#545a60",
+      "trim": "#eff0eb",
+      "roofMaterial": "metal"
+    },
+    "1271": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        630407.3,
+        5110252.0
+      ],
+      "wall": "#dadcd9",
+      "roof": "#787e84",
+      "trim": "#ecebe6",
+      "roofMaterial": "metal"
+    },
+    "1475": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        630427.0,
+        5110336.5
+      ],
+      "wall": "#a6acb0",
+      "roof": "#585e64",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle"
+    },
+    "660": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627805.0,
+        5105279.0
+      ],
+      "wall": "#ecebe5",
+      "roof": "#3e4246",
+      "trim": "#f5f4ef",
+      "roofMaterial": "shingle"
+    },
+    "804": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630654.5,
+        5109374.1
+      ],
+      "kind": "house",
+      "wall": "#eeede7",
+      "roof": "#4a4e52",
+      "trim": "#f5f4ef",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "skirting": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "843": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630782.5,
+        5109423.5
+      ],
+      "wall": "#a7adb0",
+      "roof": "#666c70",
+      "trim": "#e8e7e0",
+      "door": "#6a302a",
+      "roofMaterial": "metal"
+    },
+    "879": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        628388.8,
+        5106456.1
+      ],
+      "wall": "#5b6064",
+      "roof": "#505458",
+      "trim": "#f2f1ec",
+      "roofMaterial": "shingle"
+    },
+    "880": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        628401.2,
+        5106461.7
+      ],
+      "wall": "#5b6064",
+      "roof": "#505458",
+      "trim": "#f2f1ec",
+      "roofMaterial": "shingle"
+    },
+    "888": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630053.0,
+        5108191.3
+      ],
+      "wall": "#e6e4d8",
+      "roof": "#8c908b",
+      "trim": "#f2f1ea",
+      "roofMaterial": "metal",
+      "roofShape": "gable",
+      "storeys": 1,
+      "entrance": "none",
+      "chimney": false,
+      "shutters": false
+    },
+    "892": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630818.4,
+        5109438.8
+      ],
+      "wall": "#6f4539",
+      "roof": "#7e584c",
+      "trim": "#d8d4ca",
+      "roofMaterial": "metal"
+    },
+    "1211": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627616.0,
+        5105087.5
+      ],
+      "wall": "#833d32",
+      "roof": "#424648",
+      "trim": "#f2f0e8",
+      "roofMaterial": "shingle",
+      "storeys": 2
+    },
+    "1427": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627111.8,
+        5103623.9
+      ],
+      "wall": "#e6e5de",
+      "roof": "#9aa09f",
+      "trim": "#f0efe8",
+      "roofMaterial": "metal"
+    },
+    "1435": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        628839.5,
+        5107088.4
+      ],
+      "wall": "#90969c",
+      "roof": "#505459",
+      "trim": "#f2f1ec",
+      "roofMaterial": "shingle"
+    },
+    "1473": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        628874.8,
+        5107167.0
+      ],
+      "wall": "#983b34",
+      "roof": "#9ea4a4",
+      "trim": "#ecebe4",
+      "roofMaterial": "metal"
+    },
+    "1536": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627254.4,
+        5104084.5
+      ],
+      "wall": "#f1f0ea",
+      "roof": "#65615c",
+      "trim": "#f7f6f1",
+      "roofMaterial": "shingle",
+      "storeys": 2
+    },
+    "1588": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630086.6,
+        5108263.6
+      ],
+      "wall": "#e6e5de",
+      "roof": "#4c5054",
+      "trim": "#f4f3ed",
+      "roofMaterial": "shingle"
     }
   }
 }
