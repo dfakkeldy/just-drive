@@ -97,6 +97,12 @@
       "roads": [
         "Hillcrest Drive"
       ]
+    },
+    "henry-paint-street": {
+      "label": "Henry Paint Street",
+      "roads": [
+        "Henry Paint Street"
+      ]
     }
   },
   "overrides": {
@@ -1651,6 +1657,30 @@
       "roof": "#a89888",
       "trim": "#e6ddd2",
       "door": "#ababa5",
+      "roofMaterial": "shingle"
+    },
+    "161": {
+      "group": "henry-paint-street",
+      "road": "Henry Paint Street",
+      "at": [
+        627346.0,
+        5051701.0
+      ],
+      "wall": "#d2cfc6",
+      "roof": "#3a4046",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "2892": {
+      "group": "henry-paint-street",
+      "road": "Henry Paint Street",
+      "at": [
+        627695.96,
+        5051687.85
+      ],
+      "wall": "#f4f5f2",
+      "roof": "#3a4044",
+      "trim": "#4a5258",
       "roofMaterial": "shingle"
     }
   }
