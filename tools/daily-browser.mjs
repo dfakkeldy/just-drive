@@ -130,7 +130,7 @@ try {
       assert.ok(hud.shown && hud.inside && grid.shown && grid.inside, JSON.stringify({ hud, grid }));
       assert.match(hud.text, /\d:\d\d left/);
       const overlap = await read(`(()=>{const a=document.getElementById('firedHud').getBoundingClientRect();
-        return ['hud','shiftHud','stopHint','miniMap','relief','radio','photoTag','mailScore','endShift','pauseButton','gear','credit','mailButton','cameraButton'].filter(id=>{
+        return ['hud','shiftHud','stopHint','miniMap','relief','radio','photoTag','mailScore','endShift','pauseButton','gear','credit','mailButton','cameraButton','mpCards'].filter(id=>{
           const e=document.getElementById(id);if(!e)return false;const s=getComputedStyle(e),b=e.getBoundingClientRect();
           return s.display!=='none'&&s.visibility!=='hidden'&&b.width>0&&a.top<b.bottom&&b.top<a.bottom&&a.left<b.right&&b.left<a.right;});})()`);
       assert.deepEqual(overlap, [], 'the score panel with its card covers no other HUD piece');

@@ -73,7 +73,7 @@
 
   :root{--sky-night:#0b1620;--ink:#eef2f6;--ink-dim:#b9c3cc;--panel:rgba(8,14,20,.82);--panel-solid:#0c141c;--line:rgba(238,242,246,.22);--maple:#d0632e;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--text:system-ui,-apple-system,"Segoe UI",sans-serif}
   #shiftHud{position:fixed;z-index:3;top:calc(112px + env(safe-area-inset-top,0px));left:max(10px,env(safe-area-inset-left,0px));padding:8px 10px;background:var(--panel);border-left:3px solid var(--maple);white-space:pre-wrap;font:13px/1.6 var(--mono);font-variant-numeric:tabular-nums;pointer-events:none;max-width:calc(100% - 120px)}
-  #mailCard{position:fixed;z-index:3;left:max(10px,env(safe-area-inset-left,0px));bottom:calc(28px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;width:min(460px,calc(100% - 120px));pointer-events:none}
+  #mailCard{position:fixed;z-index:3;left:max(10px,env(safe-area-inset-left,0px));bottom:calc(36px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;width:min(460px,calc(100% - 120px));pointer-events:none}
   @media(max-width:600px){#mailCard{bottom:calc(64px + env(safe-area-inset-bottom,0px))}}
   body:not(.tcOn) #mailCard>:is(#stopHint,#mailScore){position:static;max-width:none;box-sizing:border-box;margin:0;background:var(--panel);border-left:3px solid var(--maple);border-radius:0;padding:8px 10px;color:var(--ink);font:12px/1.5 var(--mono);font-variant-numeric:tabular-nums}
   body:not(.tcOn):not(.droneOn) #mailCard>#stopHint:not(:empty)+#mailScore{padding-top:0}

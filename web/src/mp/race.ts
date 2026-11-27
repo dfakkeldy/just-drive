@@ -50,8 +50,9 @@ export class RaceView {
   private roadName(route: RaceRoute): string { return this.host.roads?.find(r=>r.id===route.roadId)?.name ?? 'Road course'; }
   update(): void {
     const s=this.net.race,me=this.net.me;
+    const gameBusy = (this.net.game?.phase ?? 0) > 0;
     if(this.panel)this.panel.hidden=!s || this.net.status!=='on';
-    if(this.readout)this.readout.hidden=!s?.route || !me || this.net.status!=='on';
+    if(this.readout)this.readout.hidden=!s?.route || !me || this.net.status!=='on' || (!s.startAt && gameBusy);
     if(!s || !me || this.net.status!=='on'){this.countdown.update(null);this.group.visible=false;return;}
     const now=this.net.serverNow(), racer=s.racers.find(r=>r.id===me.id), host=s.host===me.id;
     this.countdown.update(s.route && s.startAt ? s.startAt-now : null);

@@ -287,12 +287,26 @@ export class Drone {
   private dockHelp(): void {
     if (!this.help || document.body.classList.contains('droneSticks')) return;
     const gear = document.getElementById('gear')?.getBoundingClientRect();
-    let bottom = gear?.bottom ?? 54;
-    for (const id of ['pauseButton','placesButton','bigMapButton','endShift']) {
+    const visible = (id: string) => {
       const e = document.getElementById(id), b = e && !e.hidden && !e.classList.contains('inPanel') ? e.getBoundingClientRect() : null;
-      if (b?.width && b.height) bottom = Math.max(bottom, b.bottom);
+      return b?.width && b.height ? b : null;
+    };
+    let topEdge = gear?.bottom ?? 54;
+    for (const id of ['pauseButton','placesButton','bigMapButton','endShift']) {
+      const b = visible(id);
+      if (b) topEdge = Math.max(topEdge, b.bottom);
     }
-    const top = `${bottom + 10}px`, right = `${gear?.width ? innerWidth - gear.right : 10}px`;
+    let bottom = topEdge, rightPx = gear?.width ? innerWidth - gear.right : 10;
+    const photo = visible('photoTag');
+    if (photo) {
+      const helpBox = this.help.getBoundingClientRect();
+      const fired = visible('firedHud');
+      const underPhoto = Math.max(topEdge, photo.bottom) + 10;
+      const fitsLeft = helpBox.width > 0 && photo.left - 10 - helpBox.width >= 10;
+      if (fired && helpBox.height > 0 && underPhoto + helpBox.height > fired.top - 10 && fitsLeft) rightPx = Math.max(rightPx, innerWidth - photo.left + 10);
+      else bottom = Math.max(bottom, photo.bottom);
+    }
+    const top = `${bottom + 10}px`, right = `${rightPx}px`;
     if (this.help.style.top !== top) this.help.style.top = top;
     if (this.help.style.right !== right) this.help.style.right = right;
   }
