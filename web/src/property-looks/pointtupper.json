@@ -109,6 +109,12 @@
       "roads": [
         "Pitt Street"
       ]
+    },
+    "macsween-street": {
+      "label": "MacSween Street",
+      "roads": [
+        "MacSween Street"
+      ]
     }
   },
   "overrides": {
@@ -1749,6 +1755,56 @@
       "roof": "#8d887c",
       "trim": "#e6dcc8",
       "door": "#787a76",
+      "roofMaterial": "shingle"
+    },
+    "146": {
+      "group": "macsween-street",
+      "road": "MacSween Street",
+      "at": [
+        627994.4,
+        5052888.29
+      ],
+      "wall": "#6e757c",
+      "roof": "#c4c9cc",
+      "trim": "#e6e8e4",
+      "door": "#a6a6a1",
+      "roofMaterial": "shingle"
+    },
+    "720": {
+      "group": "macsween-street",
+      "road": "MacSween Street",
+      "at": [
+        627513.81,
+        5052615.76
+      ],
+      "wall": "#b7b5af",
+      "roof": "#d2d3d0",
+      "trim": "#f0eeea",
+      "door": "#adada7",
+      "roofMaterial": "shingle"
+    },
+    "2456": {
+      "group": "macsween-street",
+      "road": "MacSween Street",
+      "at": [
+        627480.34,
+        5052537.01
+      ],
+      "wall": "#a9a7b0",
+      "roof": "#8e969e",
+      "trim": "#e4e2dc",
+      "roofMaterial": "shingle"
+    },
+    "2954": {
+      "group": "macsween-street",
+      "road": "MacSween Street",
+      "at": [
+        627477.0,
+        5052561.13
+      ],
+      "wall": "#c8c6cc",
+      "roof": "#b0b8be",
+      "trim": "#eeeae4",
       "roofMaterial": "shingle"
     }
   }
