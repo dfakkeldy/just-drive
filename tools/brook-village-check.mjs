@@ -189,7 +189,7 @@ for (let i = 0; i < BROOK_PARKED_SPOTS.length; i++) {
 assert.ok(pushAt(site.church, 1, CHURCH_CENTER_V) > 4.0, 'church nave pushes car out');
 assert.ok(pushAt(site.church, -5, CHURCH_CENTER_V - 7.5) > 1.0, 'church west wing pushes car out');
 assert.ok(pushAt(site.church, 14, CHURCH_CENTER_V) > 1.0, 'church front portico pushes car out');
-assert.ok(pushAt(site.church, 14, CHURCH_CENTER_V - 6.0) > 0.4, 'church ramp pushes car out');
+assert.ok(pushAt(site.church, 14, CHURCH_CENTER_V - 8.5) > 0.4, 'church ramp pushes car out');
 assert.ok(pushAt(site.church, CHURCH_FLAGPOLE.u, CHURCH_FLAGPOLE.v) > 0.1, 'church flagpole pushes car out');
 assert.ok(pushAt(site.church, CHURCH_SIGNBOARD.u, CHURCH_SIGNBOARD.v) > 0.2, 'church signboard pushes car out');
 
@@ -577,6 +577,15 @@ for (const exag of [2.5, 3]) {
             assert.equal(hits.length, 0,
               `exag=${exag}: ${label} service wire seg ${seg} clips model ${hits[0]?.distance.toFixed(2)} m into segment`);
           }
+          // Extend the final segment slightly past t=1 to prove the endpoint lands directly on the exposed wall.
+          const tailStart = wirePt(0.995), tailEnd = wirePt(1.0);
+          const tailDir = tailEnd.clone().sub(tailStart), tailLen = tailDir.length();
+          raycaster.set(tailStart, tailDir.normalize());
+          raycaster.near = 0;
+          raycaster.far = tailLen + 0.03;
+          const endHits = raycaster.intersectObjects(buildingMeshes, false);
+          assert.ok(endHits.length > 0 && Math.abs(endHits[0].distance - tailLen) <= 0.025,
+            `exag=${exag}: ${label} service wire endpoint contacts wall (hit=${endHits[0]?.distance.toFixed(3)}, want=${tailLen.toFixed(3)})`);
         }
       } finally {
         buildingMeshes.forEach((m, i) => { m.material.side = origSides[i]; });

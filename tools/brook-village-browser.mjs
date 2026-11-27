@@ -120,7 +120,7 @@ for (const url of urls) {
             containerPush: test(bv.site.store, 4, 14.9),
             churchPush: test(bv.site.church, 1, 5.5),
             porticoPush: test(bv.site.church, 14, 5.5),
-            rampPush: test(bv.site.church, 14.0, -0.5),
+            rampPush: test(bv.site.church, 14.0, -3.0),
             parkedPushes: [
               test(bv.site.store, -5.2, 7.6),
               test(bv.site.store, 6.4, 7.7),

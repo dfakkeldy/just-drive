@@ -272,8 +272,8 @@ export class BrookVillageSite implements Site {
     serviceDrops?: Array<{ building: number; x: number; y: number; height: number; ground: number | null; groundX: number; groundY: number }>;
   }>(data: T): T {
     if (!Array.isArray(data.serviceDrops)) return data;
-    const [sx, sy] = this.store.map(9.05, 3.4);
-    const [cx, cy] = this.church.map(11.9, 11.85);
+    const [sx, sy] = this.store.map(9.0, 3.4);
+    const [cx, cy] = this.church.map(11.9, 11.8);
     const serviceDrops = data.serviceDrops.map((d) => {
       if (d.building === BROOK_STORE_BUILDING) {
         return { ...d, x: sx, y: sy, height: 4.75, ground: this.store.level, groundX: this.store.bx, groundY: this.store.by };
