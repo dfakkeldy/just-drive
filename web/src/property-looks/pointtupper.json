@@ -61,6 +61,12 @@
       "roads": [
         "Crandall Drive"
       ]
+    },
+    "reynolds-street": {
+      "label": "Reynolds Street",
+      "roads": [
+        "Reynolds Street"
+      ]
     }
   },
   "overrides": {
@@ -1353,6 +1359,42 @@
       "roof": "#3a322c",
       "trim": "#3e342e",
       "door": "#a6a6a1",
+      "roofMaterial": "shingle"
+    },
+    "1138": {
+      "group": "reynolds-street",
+      "road": "Reynolds Street",
+      "at": [
+        628301.8,
+        5052107.1
+      ],
+      "wall": "#f4f6f8",
+      "roof": "#8a9094",
+      "trim": "#f7f8f8",
+      "roofMaterial": "shingle"
+    },
+    "1143": {
+      "group": "reynolds-street",
+      "road": "Reynolds Street",
+      "at": [
+        628259.3,
+        5052086.2
+      ],
+      "wall": "#f4f6f8",
+      "roof": "#4a5056",
+      "trim": "#f7f8f8",
+      "roofMaterial": "shingle"
+    },
+    "1147": {
+      "group": "reynolds-street",
+      "road": "Reynolds Street",
+      "at": [
+        628292.5,
+        5052025.6
+      ],
+      "wall": "#c5d0d6",
+      "roof": "#5a6166",
+      "trim": "#f4f6f8",
       "roofMaterial": "shingle"
     }
   }
