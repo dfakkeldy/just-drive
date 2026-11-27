@@ -103,6 +103,12 @@
       "roads": [
         "Henry Paint Street"
       ]
+    },
+    "pitt-street": {
+      "label": "Pitt Street",
+      "roads": [
+        "Pitt Street"
+      ]
     }
   },
   "overrides": {
@@ -1681,6 +1687,68 @@
       "wall": "#f4f5f2",
       "roof": "#3a4044",
       "trim": "#4a5258",
+      "roofMaterial": "shingle"
+    },
+    "670": {
+      "group": "pitt-street",
+      "road": "Pitt Street",
+      "at": [
+        627781.77,
+        5052330.23
+      ],
+      "wall": "#c5c9c4",
+      "roof": "#5a6168",
+      "trim": "#f4f4f2",
+      "roofMaterial": "shingle"
+    },
+    "671": {
+      "group": "pitt-street",
+      "road": "Pitt Street",
+      "at": [
+        627815.38,
+        5052341.18
+      ],
+      "wall": "#b4333c",
+      "roof": "#4a5056",
+      "trim": "#f4f2ec",
+      "door": "#696d6d",
+      "roofMaterial": "shingle"
+    },
+    "674": {
+      "group": "pitt-street",
+      "road": "Pitt Street",
+      "at": [
+        627765.22,
+        5052362.51
+      ],
+      "wall": "#e6e3d8",
+      "roof": "#5c6770",
+      "trim": "#f6f4ee",
+      "roofMaterial": "shingle"
+    },
+    "747": {
+      "group": "pitt-street",
+      "road": "Pitt Street",
+      "at": [
+        628152.08,
+        5052701.47
+      ],
+      "wall": "#c6b48a",
+      "roof": "#8d887c",
+      "trim": "#e6dcc8",
+      "roofMaterial": "shingle"
+    },
+    "2912": {
+      "group": "pitt-street",
+      "road": "Pitt Street",
+      "at": [
+        628130.3,
+        5052693.33
+      ],
+      "wall": "#c6b48a",
+      "roof": "#8d887c",
+      "trim": "#e6dcc8",
+      "door": "#787a76",
       "roofMaterial": "shingle"
     }
   }
