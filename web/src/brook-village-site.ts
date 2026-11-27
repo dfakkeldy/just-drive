@@ -80,15 +80,10 @@ function makeFrame(building: Building, village: readonly [number, number]): Loca
 const STORE_PAD: P[] = [[-9.6, -4.4], [9.8, -4.4], [9.8, 5.2], [-9.6, 5.2]];
 const STORE_PAD_MARGIN = 2.6;
 
-/** Gravel parking lot west of the store, front apron toward the highway junction, and narrow east pull-in strip. */
+/** Gravel parking lot west of the store (trimmed clear of Stream 397), front apron and east pull-in strip. */
 export const STORE_GRAVEL: P[] = [
-  [-10.2, -9.2], [13.2, -9.2], [13.2, 19.2], [10.0, 21.5],
-  [-9.5, 18.8], [-10.2, 5.2],
-];
-
-/** Small mown grass verge west of the shipping container. */
-export const STORE_GRASS: P[] = [
-  [-10.5, 17.5], [11.5, 18.5], [10.5, 24.0], [-10.5, 23.0],
+  [-10.2, -9.2], [13.2, -9.2], [13.2, 18.8], [9.8, 18.6],
+  [4.0, 16.0], [-2.0, 12.6], [-9.6, 9.5], [-10.2, 5.2],
 ];
 
 // ---- Church site polygons in church local (u, v) metres ----
@@ -136,6 +131,13 @@ const TRACK_202_MAP: readonly P[] = [
   [631481.50, 5101172.75], [631478.96, 5101175.83], [631476.29, 5101178.78], [631473.49, 5101181.62],
   [631470.62, 5101184.39],
 ];
+/** Mapped brook (Stream 397, half-width 0.63 m) running along the west edge of the store lot. */
+const BROOK_397_MAP: readonly P[] = [
+  [631497.6, 5101197.0], [631498.4, 5101194.0], [631500.6, 5101191.0],
+  [631502.7, 5101186.0], [631503.1, 5101181.0], [631504.9, 5101176.0],
+  [631505.1, 5101167.0], [631506.0, 5101163.0], [631505.9, 5101160.0],
+  [631505.0, 5101157.0],
+];
 
 function polylineDist(pts: readonly P[], x: number, z: number): number {
   let best = Infinity;
@@ -160,9 +162,9 @@ export interface BrookParkedSpot {
 
 /** Generic random parked vehicles (no plates, badges or people), leaving open drive-in/turnaround lanes. */
 export const BROOK_PARKED_SPOTS: readonly BrookParkedSpot[] = [
-  // Store west gravel parking lot (2 vehicles parked clear of the drive-in lane and container).
-  { place: 'store', u: -3.5, v: 9.8, du: 1, dv: 0.04, type: 1 },
-  { place: 'store', u: 7.4, v: 9.6, du: -0.95, dv: -0.32, type: 2 },
+  // Store west gravel parking lot (2 vehicles parked clear of the drive-in lane, brook and container).
+  { place: 'store', u: -5.2, v: 7.6, du: 1, dv: 0.04, type: 1 },
+  { place: 'store', u: 6.4, v: 7.7, du: -1, dv: -0.05, type: 2 },
   // Store east pull-in apron beside the storefront (1 compact car clear of Lake Ainslie Chapel Rd).
   { place: 'store', u: 5.5, v: -6.4, du: 1, dv: -0.05, type: 0 },
   // Church east gravel turnaround edge (1 car parked neatly clear of front steps, ramp and U-turn path).
@@ -183,6 +185,7 @@ export class BrookVillageSite implements Site {
   private hwy252World: P[];
   private chapelRdWorld: P[];
   private track202World: P[];
+  private brook397World: P[];
 
   /** Find both Brook Village surveyed boxes, or null if either is missing or moved/turned beyond tolerance. */
   static find(list: readonly Building[]): BrookVillageBoxes | null {
@@ -212,6 +215,7 @@ export class BrookVillageSite implements Site {
     this.hwy252World = HWY_252_MAP.map(toWorld);
     this.chapelRdWorld = CHAPEL_RD_MAP.map(toWorld);
     this.track202World = TRACK_202_MAP.map(toWorld);
+    this.brook397World = BROOK_397_MAP.map(toWorld);
 
     const pts = [
       this.store.world(-12.5, -11.0), this.store.world(14.5, -11.0),
@@ -246,10 +250,15 @@ export class BrookVillageSite implements Site {
       || polylineDist(this.track202World, x, z) < 1.5 + extra;
   }
 
+  /** True when (x, z) lies within Stream 397's bed or bank corridor west of the store lot. */
+  private nearBrook(x: number, z: number, extra: number): boolean {
+    return polylineDist(this.brook397World, x, z) < 0.63 + extra;
+  }
+
   private isOpenGround(x: number, z: number): boolean {
     const s = this.store.local(x, z);
-    if (s.u >= -11.0 && s.u <= 14.0 && s.v >= -10.0 && s.v <= 24.5) {
-      if (depth(STORE_GRAVEL, s.u, s.v) > -0.5 || depth(STORE_GRASS, s.u, s.v) > -0.5) return true;
+    if (s.u >= -11.0 && s.u <= 14.0 && s.v >= -10.0 && s.v <= 20.0) {
+      if (!this.nearBrook(x, z, 2.2) && depth(STORE_GRAVEL, s.u, s.v) > -0.5) return true;
     }
     const c = this.church.local(x, z);
     if (c.u >= -16.0 && c.u <= 24.5 && c.v >= -48.0 && c.v <= 25.5) {
@@ -258,19 +267,19 @@ export class BrookVillageSite implements Site {
     return false;
   }
 
-  /** Re-aim service drops onto the hand-built store front-west upper wall and church front-west eave. */
+  /** Re-aim service drops onto exposed pole-facing walls: store front gable (pole 30:2) and church NE wall (pole 30:0). */
   adjustProps<T extends {
     serviceDrops?: Array<{ building: number; x: number; y: number; height: number; ground: number | null; groundX: number; groundY: number }>;
   }>(data: T): T {
     if (!Array.isArray(data.serviceDrops)) return data;
-    const [sx, sy] = this.store.map(7.8, 4.6);
-    const [cx, cy] = this.church.map(11.8, -0.8);
+    const [sx, sy] = this.store.map(9.05, 3.4);
+    const [cx, cy] = this.church.map(11.9, 11.85);
     const serviceDrops = data.serviceDrops.map((d) => {
       if (d.building === BROOK_STORE_BUILDING) {
-        return { ...d, x: sx, y: sy, height: 4.9, ground: this.store.level, groundX: this.store.bx, groundY: this.store.by };
+        return { ...d, x: sx, y: sy, height: 4.75, ground: this.store.level, groundX: this.store.bx, groundY: this.store.by };
       }
       if (d.building === BROOK_CHURCH_BUILDING) {
-        return { ...d, x: cx, y: cy, height: 5.1, ground: this.church.level, groundX: this.church.bx, groundY: this.church.by };
+        return { ...d, x: cx, y: cy, height: 4.55, ground: this.church.level, groundX: this.church.bx, groundY: this.church.by };
       }
       return d;
     });
@@ -285,11 +294,11 @@ export class BrookVillageSite implements Site {
     };
     const cv = CHURCH_CENTER_V;
     return [
-      // Store main 2-storey gable (+ chimney), rear extension and west shipping container.
+      // Store main 2-storey gable (+ chimney), rear extension, west shipping container and curb block.
       mk(this.store, -2.2, 9.4, -4.3, 5.1, 4.75, 9.55),
       mk(this.store, -9.2, -1.9, -4.1, 4.9, 4.75, 6.65),
-      mk(this.store, -8.5, 0.1, 14.6, 17.6, 2.75, 2.75, this.store.level + 0.35),
-      mk(this.store, 9.1, 10.5, 18.3, 20.9, 0.85, 0.85, this.store.level + 0.25),
+      mk(this.store, -0.3, 8.3, 13.4, 16.4, 2.75, 2.75, this.store.level + 0.35),
+      mk(this.store, 9.9, 11.3, 16.2, 18.8, 0.85, 0.85, this.store.level + 0.25),
       // Church nave (+ rear finial cross), cross-gable wings, front portico, steeple + cross, flagpole and lawn signboard.
       mk(this.church, -11.0, 13.0, cv - 6.8, cv + 6.8, 5.3, 12.8),
       mk(this.church, -9.8, -1.2, cv - 9.7, cv + 9.7, 4.5, 8.7),
@@ -320,16 +329,14 @@ export class BrookVillageSite implements Site {
   }
 
   surface(x: number, z: number, _ground?: number, level?: number): { dist: number; half: number; kind: number } | null {
-    // Paint gravel lots and church lawn only on L8 so L5-L7 roads and canopy hull stay untouched.
+    // Paint gravel lots and church lawn only on L8 so L5-L7 roads, canopy hull and Stream 397 stay untouched.
     if (level !== undefined && level <= 7) return null;
-    if (this.nearRoad(x, z, 2.1)) return null;
+    if (this.nearRoad(x, z, 2.1) || this.nearBrook(x, z, 3.6)) return null;
 
     const s = this.store.local(x, z);
-    if (s.u >= -11.5 && s.u <= 14.5 && s.v >= -10.5 && s.v <= 25.0) {
+    if (s.u >= -11.5 && s.u <= 14.5 && s.v >= -10.5 && s.v <= 20.0) {
       const dg = depth(STORE_GRAVEL, s.u, s.v);
       if (dg > -0.6) return { dist: Math.max(6.5, 10 - dg), half: 10, kind: GRAVEL };
-      const dl = depth(STORE_GRASS, s.u, s.v);
-      if (dl > -EDGE) return { dist: Math.max(6.5, 10 - dl), half: 10, kind: GRASS };
     }
 
     const c = this.church.local(x, z);

@@ -117,10 +117,17 @@ for (const url of urls) {
           };
           return {
             storePush: test(bv.site.store, 3, 0),
-            containerPush: test(bv.site.store, -4, 16),
+            containerPush: test(bv.site.store, 4, 14.9),
             churchPush: test(bv.site.church, 1, 5.5),
             porticoPush: test(bv.site.church, 14, 5.5),
-            storeLane: test(bv.site.store, 5.0, 12.6, -1, 0),
+            rampPush: test(bv.site.church, 14.0, -0.5),
+            parkedPushes: [
+              test(bv.site.store, -5.2, 7.6),
+              test(bv.site.store, 6.4, 7.7),
+              test(bv.site.store, 5.5, -6.4),
+              test(bv.site.church, 16.5, 18.8),
+            ],
+            storeLane: test(bv.site.store, 5.0, 11.2, -1, 0),
             churchTurn: test(bv.site.church, 20.5, 5.5, 0, 1),
           };
         } finally { Object.assign(v, saved); }
@@ -129,6 +136,10 @@ for (const url of urls) {
       assert.ok(contact.containerPush > 0.8, `${name}: container pushes car out (${contact.containerPush.toFixed(2)} m)`);
       assert.ok(contact.churchPush > 4.0, `${name}: church pushes car out (${contact.churchPush.toFixed(2)} m)`);
       assert.ok(contact.porticoPush > 1.0, `${name}: church portico pushes car out (${contact.porticoPush.toFixed(2)} m)`);
+      assert.ok(contact.rampPush > 0.4, `${name}: church ramp pushes car out (${contact.rampPush.toFixed(2)} m)`);
+      for (let i = 0; i < contact.parkedPushes.length; i++) {
+        assert.ok(contact.parkedPushes[i] > 0.5, `${name}: parked car ${i} pushes car out (${contact.parkedPushes[i].toFixed(2)} m)`);
+      }
       assert.ok(contact.storeLane < 0.05, `${name}: store lot lane admits car (${contact.storeLane.toFixed(3)} m)`);
       assert.ok(contact.churchTurn < 0.05, `${name}: church turnaround admits car (${contact.churchTurn.toFixed(3)} m)`);
       console.log(`PASS ${name}: ${state.tris} landmark / ${state.featureTris} total tris; no surveyed boxes; live contacts verified`);

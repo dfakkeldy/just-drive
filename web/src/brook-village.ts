@@ -81,8 +81,8 @@ const MULCH = hex(0x4c3627);
 // ---- Exported footprint constants (used by node & browser checks) ----
 export const STORE_MAIN = { u0: -2.0, u1: 9.0, v0: -3.9, v1: 4.7, eave: 4.65, ridge: 8.45 };
 export const STORE_REAR = { u0: -9.0, u1: -2.0, v0: -3.7, v1: 4.5, eave: 4.65, ridge: 6.35 };
-export const STORE_CONTAINER = { u0: -8.2, u1: -0.2, v0: 14.8, v1: 17.4, height: 2.6 };
-export const STORE_CURB = { u: 9.8, v: 19.6 };
+export const STORE_CONTAINER = { u0: 0.0, u1: 8.0, v0: 13.6, v1: 16.2, height: 2.6 };
+export const STORE_CURB = { u: 10.6, v: 17.5 };
 
 const CV = CHURCH_CENTER_V;
 export const CHURCH_NAVE = { u0: -10.5, u1: 12.5, v0: CV - 6.3, v1: CV + 6.3, eave: 5.15, ridge: 11.6 };

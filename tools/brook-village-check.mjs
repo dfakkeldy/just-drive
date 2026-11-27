@@ -19,6 +19,7 @@ import * as THREE from '../web/node_modules/three/build/three.module.js';
 import { clearBoxes } from '../web/src/buildings.ts';
 import { roofHeights } from '../web/src/drone.ts';
 import { PARKED_SIZE } from '../web/src/parked.ts';
+import { Streams } from '../web/src/streams.ts';
 import { SXS_SPEC } from '../web/src/sxs.ts';
 import { Terrain } from '../web/src/terrain.ts';
 import { TRUCK_SPEC } from '../web/src/truck.ts';
@@ -38,6 +39,8 @@ const manifest = JSON.parse(readFileSync(`${AREA}manifest.json`, 'utf8'));
 const buildings = JSON.parse(readFileSync(`${AREA}buildings.json`, 'utf8')).buildings;
 const roads = JSON.parse(readFileSync(`${AREA}roads.json`, 'utf8')).roads;
 const props = JSON.parse(readFileSync(`${AREA}props.json`, 'utf8'));
+const streamsData = JSON.parse(readFileSync(`${AREA}${manifest.streams.file}`, 'utf8'));
+const streams = new Streams(streamsData, manifest.village);
 
 // 1. Site lookup against the baked Mabou catalog (tight <0.5 m / <0.5 deg guard on both buildings).
 const found = BrookVillageSite.find(buildings);
@@ -55,12 +58,12 @@ assert.equal(BrookVillageSite.find([found.church]), null, 'missing store ignored
 const site = new BrookVillageSite(found, manifest.village);
 assert.ok(site.clear.length >= 10, `tree-clear strips generated (${site.clear.length})`);
 
-// Service drops re-aim cleanly onto the hand-built store and church walls.
+// Service drops re-aim cleanly onto the exposed pole-facing store front gable and church NE wall.
 const aimedProps = site.adjustProps(props);
 const storeDrop = aimedProps.serviceDrops.find((d) => d.building === BROOK_STORE_BUILDING);
 const churchDrop = aimedProps.serviceDrops.find((d) => d.building === BROOK_CHURCH_BUILDING);
-assert.ok(storeDrop && Math.abs(storeDrop.height - 4.9) < 0.01, 'store service drop re-aimed');
-assert.ok(churchDrop && Math.abs(churchDrop.height - 5.1) < 0.01, 'church service drop re-aimed');
+assert.ok(storeDrop && Math.abs(storeDrop.height - 4.75) < 0.01, 'store service drop re-aimed');
+assert.ok(churchDrop && Math.abs(churchDrop.height - 4.55) < 0.01, 'church service drop re-aimed');
 
 // Every tile painted within maxTexel must already have a baked road field so no coarse tile allocates a new texture.
 const roadLevels = Object.keys(manifest.roads.levels).map(Number);
@@ -176,8 +179,13 @@ const pushAt = (frame, u, v, heading = 0, spec = CAR_SPEC) => {
 };
 assert.ok(pushAt(site.store, 3, 0) > 2.5, 'store main block pushes car out');
 assert.ok(pushAt(site.store, -6, 0) > 2.0, 'store rear extension pushes car out');
-assert.ok(pushAt(site.store, -4, 16) > 0.8, 'store shipping container pushes car out');
-assert.ok(pushAt(site.store, -3.5, 9.8) > 0.5, 'store parked SUV pushes car out');
+assert.ok(pushAt(site.store, 4, 14.9) > 0.8, 'store shipping container pushes car out');
+for (let i = 0; i < BROOK_PARKED_SPOTS.length; i++) {
+  const sp = BROOK_PARKED_SPOTS[i];
+  const frame = sp.place === 'store' ? site.store : site.church;
+  assert.ok(pushAt(frame, sp.u, sp.v, frame.heading(sp.du, sp.dv)) > 0.5,
+    `parked vehicle ${i} (${sp.place} at ${sp.u}, ${sp.v}) pushes car out`);
+}
 assert.ok(pushAt(site.church, 1, CHURCH_CENTER_V) > 4.0, 'church nave pushes car out');
 assert.ok(pushAt(site.church, -5, CHURCH_CENTER_V - 7.5) > 1.0, 'church west wing pushes car out');
 assert.ok(pushAt(site.church, 14, CHURCH_CENTER_V) > 1.0, 'church front portico pushes car out');
@@ -187,7 +195,7 @@ assert.ok(pushAt(site.church, CHURCH_SIGNBOARD.u, CHURCH_SIGNBOARD.v) > 0.2, 'ch
 
 // Continuous swept routes: store west parking drive-in and church gravel turnaround loop.
 const driveRoutes = [
-  ['Store west lot drive-in', site.store, [[18.0, 14.0], [11.5, 13.0], [5.0, 12.6], [1.5, 12.6]]],
+  ['Store west lot drive-in', site.store, [[18.0, 11.4], [11.5, 11.2], [5.0, 11.2], [0.5, 11.0]]],
   ['Church front gravel turnaround', site.church, [[28.5, -12.0], [20.5, -6.0], [20.5, 5.5], [20.5, 14.0], [28.5, 22.0]]],
 ];
 for (const [routeName, frame, pts] of driveRoutes) {
@@ -368,14 +376,37 @@ assert.ok(mainSrc.includes('clear.push(...clearBoxes(brookVillageBoxes.store, ma
   && mainSrc.includes('clear.push(...clearBoxes(brookVillageBoxes.church, manifest.village, 2.5))'),
   'main.ts preserves store 69 and church 1570 clearBoxes in regular terrain.clear for L5-L7 parity');
 
+// Sample Stream 397 (mapped brook beside the store) across its channel and banks inside the site box.
+const brookSamples = [];
+for (const s of streamsData.streams) {
+  if (![397, 398].includes(s.id)) continue;
+  for (let k = 0; k < s.pts.length - 1; k++) {
+    const [e0, n0] = s.pts[k], [e1, n1] = s.pts[k + 1];
+    const x0 = e0 - manifest.village[0], z0 = manifest.village[1] - n0;
+    const x1 = e1 - manifest.village[0], z1 = manifest.village[1] - n1;
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    if (len < 1e-4) continue;
+    const tx = (x1 - x0) / len, tz = (z1 - z0) / len, nx = -tz, nz = tx;
+    const steps = Math.max(1, Math.ceil(len));
+    for (let i = 0; i <= steps; i++) {
+      const f = i / steps, cx = x0 + (x1 - x0) * f, cz = z0 + (z1 - z0) * f;
+      if (cx < site.box[0] - 4 || cx > site.box[2] + 4 || cz < site.box[1] - 4 || cz > site.box[3] + 4) continue;
+      for (const side of [-1.0, -0.5, 0, 0.5, 1.0]) {
+        brookSamples.push({ id: s.id, x: cx + nx * side, z: cz + nz * side, side });
+      }
+    }
+  }
+}
+assert.ok(brookSamples.length >= 100, `sampled ${brookSamples.length} brook channel/bank points`);
+
 for (const level of [5, 6, 7, 8]) {
-  const baseTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, [...surveyedClear]);
-  const siteTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, [...surveyedClear]);
+  const baseTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, [...surveyedClear], { streams });
+  const siteTerrain = new Terrain(manifest, AREA.slice(0, -1), shared, 2.5, 0, [...surveyedClear], { streams });
   siteTerrain.sites.push(site);
   for (const box of site.clear) siteTerrain.addTreeClear(box);
   const tileSize = manifest.size / 2 ** level;
   const needed = new Set();
-  for (const pt of roadSamples) {
+  for (const pt of [...roadSamples, ...brookSamples]) {
     const ti = Math.floor((pt.x + manifest.village[0] - manifest.origin[0]) / tileSize);
     const tj = Math.floor((manifest.origin[1] - (manifest.village[1] - pt.z)) / tileSize);
     needed.add(`${ti}_${tj}`);
@@ -393,6 +424,32 @@ for (const level of [5, 6, 7, 8]) {
     assert.equal(ss.kind, sb.kind, `L${level} ${pt.roadName} surfaceAt.kind unchanged`);
     assert.equal(ss.halfWidth, sb.halfWidth, `L${level} ${pt.roadName} surfaceAt.halfWidth unchanged`);
     assert.equal(ss.roadDist, sb.roadDist, `L${level} ${pt.roadName} surfaceAt.roadDist bit-for-bit unchanged`);
+    assert.equal(ss.canopy, sb.canopy, `L${level} ${pt.roadName} protected road canopy unchanged`);
+  }
+  if (level === 8) {
+    // Streams-enabled brook bed height and surface parity across Stream 397 (and nearby Stream 398).
+    for (const pt of brookSamples) {
+      assert.equal(siteTerrain.meshHeightAt(pt.x, pt.z), baseTerrain.meshHeightAt(pt.x, pt.z),
+        `L8 brook ${pt.id} (side=${pt.side.toFixed(1)} m) bed meshHeightAt bit-for-bit unchanged`);
+      const sb = baseTerrain.surfaceAt(pt.x, pt.z), ss = siteTerrain.surfaceAt(pt.x, pt.z);
+      assert.ok(sb && ss, 'L8 brook surfaceAt present');
+      assert.equal(ss.kind, sb.kind, `L8 brook ${pt.id} surfaceAt.kind unchanged`);
+      assert.equal(ss.roadDist, sb.roadDist, `L8 brook ${pt.id} surfaceAt.roadDist unchanged`);
+    }
+    // Canopy clearing proof: site clears real surveyed canopy inside cleared grounds without touching road edges.
+    let clearedNonZero = 0, testedOpen = 0;
+    for (let x = Math.ceil(site.box[0]); x <= Math.floor(site.box[2]); x += 1) {
+      for (let z = Math.ceil(site.box[1]); z <= Math.floor(site.box[3]); z += 1) {
+        if (!site.clearCanopy(x, z, 8)) continue;
+        testedOpen++;
+        const sb = baseTerrain.surfaceAt(x, z), ss = siteTerrain.surfaceAt(x, z);
+        assert.ok(sb && ss, 'L8 open ground surfaceAt present');
+        assert.equal(ss.canopy, 0, `L8 cleared ground (${x}, ${z}) canopy cleared to 0`);
+        if (sb.canopy > 0.5) clearedNonZero++;
+      }
+    }
+    assert.ok(testedOpen >= 200 && clearedNonZero >= 20,
+      `L8 canopy clearing removed ${clearedNonZero} real canopy samples across ${testedOpen} cleared cells`);
   }
 }
 
@@ -484,6 +541,45 @@ for (const exag of [2.5, 3]) {
         const roofH = ownRoofAt(cw.x, cw.z);
         assert.ok(Number.isFinite(roofH) && roofH >= bounds.maxY,
           `exag=${exag}: static roofBoxes at ${sName} (${roofH.toFixed(3)}) covers built peak (${bounds.maxY.toFixed(3)})`);
+      }
+      // Sagged service-drop wire path (matching props.ts) must reach both anchors without clipping the built meshes.
+      bv.group.updateMatrixWorld(true);
+      const buildingMeshes = [...storeGroup.children, ...churchGroup.children].filter((c) => c.isMesh);
+      const raycaster = new THREE.Raycaster();
+      const origSides = buildingMeshes.map((m) => m.material.side);
+      for (const m of buildingMeshes) m.material.side = THREE.DoubleSide;
+      try {
+        for (const [label, drop, pole] of [
+          ['store', storeDrop, props.poles.find((p) => p.road === storeDrop.road && p.n === storeDrop.n)],
+          ['church', churchDrop, props.poles.find((p) => p.road === churchDrop.road && p.n === churchDrop.n)],
+        ]) {
+          assert.ok(pole, `${label} service-drop pole found`);
+          const px = pole.x - manifest.village[0], pz = manifest.village[1] - pole.y;
+          const h = (pole.heading * Math.PI) / 180;
+          const ax = px - Math.cos(h) * 0.38, az = pz - Math.sin(h) * 0.38;
+          const bx = drop.x - manifest.village[0], bz = manifest.village[1] - drop.y;
+          const ya = L8.heightAt(px, pz), yb = drop.ground * exag;
+          const span = Math.hypot(bx - px, bz - pz);
+          const sag = Math.min(0.65, span * 0.018);
+          const wirePt = (t) => new THREE.Vector3(
+            ax + (bx - ax) * t,
+            ya + 6.71 + (yb + drop.height - ya - 6.71) * t - 4 * t * (1 - t) * sag,
+            az + (bz - az) * t,
+          );
+          for (let seg = 0; seg < 10; seg++) {
+            const t0 = seg / 10, t1 = Math.min((seg + 1) / 10, 0.995);
+            const p0 = wirePt(t0), p1 = wirePt(t1);
+            const dir = p1.clone().sub(p0), len = dir.length();
+            raycaster.set(p0, dir.normalize());
+            raycaster.near = 0;
+            raycaster.far = len;
+            const hits = raycaster.intersectObjects(buildingMeshes, false);
+            assert.equal(hits.length, 0,
+              `exag=${exag}: ${label} service wire seg ${seg} clips model ${hits[0]?.distance.toFixed(2)} m into segment`);
+          }
+        }
+      } finally {
+        buildingMeshes.forEach((m, i) => { m.material.side = origSides[i]; });
       }
       // Downhill grounding on sloped props (shipping container, flagpole, church signboard).
       for (const [sName, grp, frame, u0, u1, v0, v1] of [
