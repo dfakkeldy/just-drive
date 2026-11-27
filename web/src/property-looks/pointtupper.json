@@ -49,6 +49,12 @@
       "roads": [
         "Charles MacLean Road"
       ]
+    },
+    "philpott-street": {
+      "label": "Philpott Street",
+      "roads": [
+        "Philpott Street"
+      ]
     }
   },
   "overrides": {
@@ -1210,6 +1216,92 @@
       "wall": "#a4c4d8",
       "roof": "#4a5056",
       "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "762": {
+      "group": "philpott-street",
+      "road": "Philpott Street",
+      "at": [
+        627432.0,
+        5052760.2
+      ],
+      "wall": "#8e9498",
+      "roof": "#3e4448",
+      "trim": "#f4f4f2",
+      "door": "#adada7",
+      "roofMaterial": "shingle"
+    },
+    "766": {
+      "group": "philpott-street",
+      "road": "Philpott Street",
+      "at": [
+        627441.8,
+        5052809.6
+      ],
+      "wall": "#dfe2e0",
+      "roof": "#3a4044",
+      "trim": "#f4f4f2",
+      "roofMaterial": "shingle"
+    },
+    "769": {
+      "group": "philpott-street",
+      "road": "Philpott Street",
+      "at": [
+        627468.6,
+        5052789.1
+      ],
+      "wall": "#9a2e36",
+      "roof": "#3e4448",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1302": {
+      "group": "philpott-street",
+      "road": "Philpott Street",
+      "at": [
+        627698.8,
+        5052991.8
+      ],
+      "wall": "#f4f3ee",
+      "roof": "#3a4044",
+      "trim": "#f7f6f2",
+      "roofMaterial": "shingle"
+    },
+    "1304": {
+      "group": "philpott-street",
+      "road": "Philpott Street",
+      "at": [
+        627709.9,
+        5053003.0
+      ],
+      "wall": "#e4d8c4",
+      "roof": "#3a4044",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1303": {
+      "group": "philpott-street",
+      "road": "Philpott Street",
+      "at": [
+        627725.3,
+        5053010.0
+      ],
+      "wall": "#8b3a34",
+      "roof": "#4a5056",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "853": {
+      "group": "philpott-street",
+      "road": "Philpott Street",
+      "at": [
+        627831.4,
+        5053087.8
+      ],
+      "wall": "#7e888e",
+      "roof": "#3e4448",
+      "trim": "#f2f4f6",
+      "door": "#a6a6a1",
       "roofMaterial": "shingle"
     }
   }
