@@ -25,6 +25,8 @@ export interface Input { throttle: number; steer: number; handbrake: boolean; to
 export const PUDDLE_DRAG = 0.7;
 /** Yaw per metre of water on one side more than the other, per m/s: the wet side holds the car back and turns it in. */
 export const PUDDLE_PULL = 0.12;
+/** Driven crawl cap through dense roadside woods (canopy > 1.6), in m/s (1 km/h). */
+export const BRUSH_CRAWL_SPEED = 1 / 3.6;
 const STEP = 1 / 120;
 // Cornering grip, as a multiple of what real tyres give. At 1 the car was calm but could not take a bend at
 // speed (the owner's second drive, 10 Nov 2026); this is a game, so the tyres hold harder than life.
@@ -41,7 +43,7 @@ const SURFACES = {
   // A rough stretch (rough-roads.ts): mud and loose stone in broken ruts. It sounds and throws dirt as a dirt track.
   rough: { mu: 0.55, roll: 0.075, rough: 0.05, name: 'dirt track' },
   grass: { mu: 0.5, roll: 0.09, rough: 0.04, name: 'grass' },
-  brush: { mu: 0.42, roll: 0.5, rough: 0.07, name: 'brush' },
+  brush: { mu: 0.42, roll: 0.06, rough: 0.07, name: 'brush' },
 };
 
 /**
@@ -830,12 +832,15 @@ export class Vehicle {
       // On washboard the tyres skip from ridge to ridge: the faster the car, the less they hold.
       const skip = surf === SURFACES.washboard ? THREE.MathUtils.clamp(1 - (Math.abs(vf) - 5) / 15, 0.28, 1) : 1;
       const horse = this.spec.locomotion === 'horse';
+      const brushCrawl = !horse && surf === SURFACES.brush;
+      const vfBefore = vf;
       const mu = surf.mu * skip * snowGrip, t = input.throttle;
       const hoofGrip = horse ? .9 : mu;
       let a = 0;
       if (t > 0 && vf > -0.5) a += t * Math.min(this.spec.engineAcceleration, this.spec.enginePower / (Math.abs(vf) + 1), hoofGrip * G * this.spec.tractionShare);       // power, then traction
       else if (t < 0 && vf < 0.5) a += t * (vf > -this.spec.reverseSpeed ? this.spec.reverseAcceleration : 0);                                      // reverse
       else if (t !== 0) a -= Math.sign(vf) * Math.abs(t) * this.spec.brake * hoofGrip;                                 // brake
+      if (brushCrawl && ((t > 0 && vf > BRUSH_CRAWL_SPEED) || (t < 0 && vf < -BRUSH_CRAWL_SPEED))) a = 0;
       if (input.touch && this.strongHelp && this.touchSpeedLimit && t > 0 && vf > 0) {
         const limit = touchLimit;
         // Leave ALL engine power below the band, including on hills. Above it the limiter eases the engine off.
@@ -855,12 +860,18 @@ export class Vehicle {
       a -= horse && onDeck ? 0 : G * Math.sin(slopeF);
       const hard = Math.abs(input.steer);
       if (hard > 0.6 && Math.abs(vf) > 13) a -= Math.sign(vf) * this.spec.hardSteerDrag * ((hard - 0.6) / 0.4) * Math.min(1, (Math.abs(vf) - 13) / 10);
-      const drag = (horse ? .022 : surf.roll) * G + (this.towLoad && this.spec.mass ? this.spec.aeroDrag * vf * vf * (1 + this.towLoad.dragShare * this.towLoad.mass / this.spec.mass) : this.spec.aeroDrag * vf * vf) + (!horse && surf === SURFACES.brush ? 0.9 * Math.abs(vf) : 0)
+      const brushExcess = brushCrawl ? Math.max(0, Math.abs(vf) - BRUSH_CRAWL_SPEED) : 0;
+      const drag = (horse ? .022 : surf.roll) * G + (this.towLoad && this.spec.mass ? this.spec.aeroDrag * vf * vf * (1 + this.towLoad.dragShare * this.towLoad.mass / this.spec.mass) : this.spec.aeroDrag * vf * vf)
+        + (brushExcess > 0 ? Math.min(4.3, brushExcess * 40) + 0.9 * Math.abs(vf) : 0)
         + deepest * 45 * Math.min(1, Math.abs(vf) / 3)   // a wheel in a pothole drags hard
         + wet * PUDDLE_DRAG * Math.abs(vf);              // and water holds the wheels back
       // Resistance cannot reverse the car: it only brings it to rest.
-      if (Math.abs(vf) > 0.05 || Math.abs(a) > drag) a -= Math.sign(vf || a) * Math.min(drag, Math.abs(vf) / dt + Math.abs(a));
+      if (Math.abs(vf) > 0.05 || Math.abs(a) > drag || (brushCrawl && Math.abs(vf) > 0)) a -= Math.sign(vf || a) * Math.min(drag, Math.abs(vf) / dt + Math.abs(a));
       vf += a * dt;
+      if (brushCrawl && Math.abs(vf) > BRUSH_CRAWL_SPEED) {
+        const cap = Math.max(BRUSH_CRAWL_SPEED, Math.abs(vfBefore));
+        if (Math.abs(vf) > cap) vf = Math.sign(vf) * cap;
+      }
       if (horse) vf = THREE.MathUtils.clamp(vf, -this.spec.reverseSpeed, horseSpeedLimit(onDeck ? 'gravel' : surf.name, onDeck ? 0 : slopeF));
       if (Math.abs(vf) < 0.03 && t === 0 && Math.abs(G * Math.sin(slopeF)) < surf.roll * G + 0.6) vf = 0;   // parked
 
@@ -1029,6 +1040,7 @@ export class Vehicle {
     let a = 0;
     if (t > 0) a += t * Math.min(this.spec.engineAcceleration, this.spec.enginePower / (v + 1), mu * G * this.spec.tractionShare);
     else if (t < 0) a += t * this.spec.brake * mu;
+    if (surf === SURFACES.brush && t > 0 && v > BRUSH_CRAWL_SPEED) a = 0;
     // The touch speed limit eases the engine off in a slide as on grip.
     if (touchLimit > 0 && t > 0) {
       if (v >= touchLimit - 1) this.#heldTouchSpeedLimit = touchLimit;
@@ -1042,7 +1054,8 @@ export class Vehicle {
     a -= G * Math.sin(slopeF);
     const measured = slideAngle(vf, vl), m = d.step(spec, input, g, measured, dt);
     const aero = this.towLoad && this.spec.mass ? this.spec.aeroDrag * (1 + this.towLoad.dragShare * this.towLoad.mass / this.spec.mass) : this.spec.aeroDrag;
-    const drag = surf.roll * G + aero * v * v + (surf === SURFACES.brush ? .9 * v : 0) + deepest * 45 * Math.min(1, v / 3) + wet * PUDDLE_DRAG * v + m.scrub;
+    const brushExcess = surf === SURFACES.brush ? Math.max(0, v - BRUSH_CRAWL_SPEED) : 0;
+    const drag = surf.roll * G + aero * v * v + (brushExcess > 0 ? Math.min(4.3, brushExcess * 40) + .9 * v : 0) + deepest * 45 * Math.min(1, v / 3) + wet * PUDDLE_DRAG * v + m.scrub;
     v = Math.max(0, v + (a - drag) * dt);
     // The path turns; the nose leads it by the new slide angle.
     this.heading = this.heading - measured + m.pathRate * dt + m.angle;
