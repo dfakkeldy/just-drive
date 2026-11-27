@@ -38,13 +38,13 @@ interface Graph {
   splash: GainNode; master: GainNode;
 }
 
-/** The volume a new player hears, well under the radio music. At this setting the horse's hooves keep their own level. */
+/** The motor volume a new player hears, well under the radio music. */
 export const DEFAULT_ENGINE_VOLUME = .25;
 
-/** Reads the saved volume (0 to 1). */
-export function savedEngineVolume(): number {
+/** Reads the saved volume (0 to 1), or `fallback` when none is saved. */
+export function savedEngineVolume(fallback = DEFAULT_ENGINE_VOLUME): number {
   try { const v = parseFloat(localStorage.getItem(KEY) ?? ''); if (v >= 0 && v <= 1) return v; } catch { /* private mode */ }
-  return DEFAULT_ENGINE_VOLUME;
+  return fallback;
 }
 
 /** Keeps the volume (0 to 1) for the next visit. The engine and the hooves share it. */

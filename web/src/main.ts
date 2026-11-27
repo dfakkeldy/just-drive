@@ -176,6 +176,7 @@ import { Replay } from './replay';
 import { YardSite, yardMode } from './yard-site';
 import {createTestPark,testParkPlaces} from './stunt-test-park';
 import { EngineSound, engineVolumeSetting, saveEngineVolume, savedEngineVolume, type DrivingMoment } from './engine-sound';
+import { DEFAULT_HOOF_VOLUME } from './horse-sound';
 import { Drone, createDroneButton, createDroneRig, createDroneSticks, createTerrainReady, roofHeights, droneSpans, DRONE_HELP, DRONE_TOUCH_HELP, DRONE_FREE_HELP, DRONE_FREE_TOUCH_HELP } from './drone';
 import { DRONE, DRONE_LOAD, loadSpeedCap } from './drone-rules';
 import { deckCounts } from './bridge-contact';
@@ -2416,6 +2417,7 @@ if (!bare && params.get('radio') !== '0') {
     // page, the mail game's "Just drive" mode, its other areas and 1884) hears every station everywhere (the owner, 20 Nov 2026).
     if (gameMode === 'explore') radio?.useReception(null);
     if (params.get('reception') === '0') radio?.useReception(null);   // every station everywhere, as on the Just Listen page
+    radio?.setPlace(vehicle.x + manifest.village[0], manifest.village[1] - vehicle.z);
     if (import.meta.env.DEV) expose({ radio });   // for tools/radio-check.mjs
     if (started) radio?.start();
     if (fired && next) void fetchCalls(audioBase).then(list => {
@@ -2432,8 +2434,9 @@ if (!bare && params.get('radio') !== '0') {
 // hoof sound (horse-sound.ts) under the same stored volume. ?engine=0 leaves the engine out.
 const engineSound = !droneVehicle && !bare && !horse && params.get('engine') !== '0' ? new EngineSound(LOW) : null;
 if (!bare) {
-  ride.setHoofVolume(savedEngineVolume());
-  if (engineSound || horse) engineVolumeSetting(horse ? 'Hoof sound' : 'Engine sound', savedEngineVolume(), v => { if (engineSound) engineSound.setVolume(v); else saveEngineVolume(v); ride.setHoofVolume(v); });
+  const startVolume = horse ? savedEngineVolume(DEFAULT_HOOF_VOLUME) : savedEngineVolume();
+  ride.setHoofVolume(startVolume);
+  if (engineSound || horse) engineVolumeSetting(horse ? 'Hoof sound' : 'Engine sound', startVolume, v => { if (engineSound) engineSound.setVolume(v); else saveEngineVolume(v); ride.setHoofVolume(v); });
 }
 if (import.meta.env.DEV) expose({ engineSound });   // for tools/engine-sound-browser.mjs
 if (droneVehicle && mode === 'drive') launchDrone();

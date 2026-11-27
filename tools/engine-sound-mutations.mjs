@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 const root = resolve(import.meta.dirname, '..'), dir = mkdtempSync(`${tmpdir()}/mmm-engine-sound-`);
 // The files the check reads as text (its wiring pins); the copy under `dir` is its root.
-const READS = ['engine-sound.ts', 'main.ts', 'radio.ts', 'vehicle.ts'];
+const READS = ['engine-sound.ts', 'main.ts', 'radio.ts', 'ride-features.ts', 'vehicle.ts'];
 const R = 'engine-sound-rules', G = 'engine-sound', survived = [];
 // [name, anchor, replacement, file under web/src]
 const mutants = [

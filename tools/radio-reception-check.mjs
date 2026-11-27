@@ -232,11 +232,12 @@ function sound(api) {
 
 // The car radio alone asks the rules; the Just Listen page and the shared engine never do.
 const EXPLORE_LINE = "    if (gameMode === 'explore') radio?.useReception(null);\n";
+const PLACE_LINE = 'radio?.setPlace(vehicle.x + manifest.village[0], manifest.village[1] - vehicle.z);';
 // `main`: the text of main.ts, so that the mutants below can hand in a broken one.
 function wiring(main = read('web/src/main.ts')) {
   for (const file of ['web/src/listen.ts', 'web/src/radio-player.ts']) assert.ok(!read(file).includes('radio-reception'), `${file} has no reception`);
   const radio = read('web/src/radio.ts');
-  assert.equal(main.split('radio?.setPlace(vehicle.x + manifest.village[0], manifest.village[1] - vehicle.z);').length, 2, 'the game tells the radio where the car is, once');
+  assert.equal(main.split(PLACE_LINE).length, 3, 'the game tells the radio where the car is on load and every frame');
   assert.equal(main.split("if (params.get('reception') === '0') radio?.useReception(null);").length, 2, '?reception=0');
   // Only the mail shift has reception: just driving (explore mode) hears every station everywhere (the owner, 20 Nov 2026).
   // The line must run after the radio is made, in loadRadio's own callback. Comment lines do not count.
@@ -245,6 +246,7 @@ function wiring(main = read('web/src/main.ts')) {
   assert.ok(callback.includes('radio = next;'), 'main.ts makes the radio in a loadRadio callback; if that has moved, read it here in the new way');
   assert.equal(code.split(drop).length, 2, 'just driving takes the reception map away, once');
   assert.ok(callback.indexOf(drop) > callback.indexOf('radio = next;'), 'and after the radio is made, in its own callback');
+  assert.ok(callback.indexOf(PLACE_LINE) > callback.indexOf(drop), 'initial car place is set after useReception and before expose/start');
   assert.equal(code.split('useReception(').length, 3, 'and nothing else in main.ts gives the radio a map');
   assert.ok(radio.includes("from './radio-reception'") && radio.includes('nextOnDial(') && radio.includes('private map: ReceptionMap | null = RECEPTION;'));
   assert.ok(radio.includes('this.audio.muted = this.music <= 0;'), 'a lost station is muted (a phone ignores the volume)');
@@ -253,31 +255,67 @@ function wiring(main = read('web/src/main.ts')) {
 
 function all(api) { words(api); villages(api); canal(api); table(api); blackstone(api); shape(api); dial(api); sound(api); }
 
-// Startup at /blackstone: fresh player gets 103.5 with zero static; a saved out-of-range station from Just drive falls
-// back for this visit without overwriting localStorage; a saved clear station or 'off' stays; explore mode keeps any
-// saved station; driving into a hollow after startup fades without changing the dial.
-function startup(RadioClass = Radio) {
-  const savedGlobals = Object.fromEntries(['document', 'Audio', 'localStorage', 'matchMedia', 'performance'].map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
+// Startup at /blackstone: fresh player gets 103.5 playing with zero static and no dial burst; a saved out-of-range
+// station falls back for this visit without overwriting localStorage (in either setPlace/start order); a saved clear
+// station or 'off' stays; explore mode keeps any saved station; driving into a hollow after startup fades without moving the dial.
+async function startup(RadioClass = Radio) {
+  const keys = ['document', 'window', 'Audio', 'AudioContext', 'fetch', 'URL', 'localStorage', 'matchMedia', 'performance'];
+  const savedGlobals = Object.fromEntries(keys.map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
   const el = () => ({ id: '', title: '', textContent: '', hidden: false, style: {}, classList: { contains() { return false; }, toggle() {}, add() {}, remove() {} }, setAttribute() {}, append() {}, appendChild() {}, addEventListener() {}, insertBefore() {} });
   const stations = catalogue.stations.map(s => ({ dial: s.dial, name: s.name, tracks: [{ file: s.tracks[0].source + '.mp3', title: s.tracks[0].title, seconds: 60 }] }));
+  const trackFor = dial => stations.find(s => s.dial === dial).tracks[0].file;
+  const tick = () => new Promise(r => setTimeout(r, 0));
   try {
-    globalThis.Audio = class { preload = ''; volume = 1; muted = false; paused = true; src = ''; readyState = 0; currentTime = 0; addEventListener() {} play() { this.paused = false; return Promise.resolve(); } pause() { this.paused = true; } };
+    let staticCtxMade = 0;
+    const FakeAudioContext = class { constructor() { staticCtxMade++; } };
+    globalThis.AudioContext = FakeAudioContext;
+    globalThis.window = { AudioContext: FakeAudioContext };
+    globalThis.Audio = class {
+      preload = ''; volume = 1; muted = false; paused = true; src = ''; readyState = 2; currentTime = 0; duration = 60;
+      listeners = new Map();
+      addEventListener(type, fn) { if (!this.listeners.has(type)) this.listeners.set(type, []); this.listeners.get(type).push(fn); }
+      emit(type) { for (const fn of this.listeners.get(type) ?? []) fn(); }
+      play() { this.paused = false; this.emit('playing'); return Promise.resolve(); }
+      pause() { this.paused = true; this.emit('pause'); }
+    };
     globalThis.document = { hidden: false, createElement: el, head: el(), body: el(), getElementById: () => null, addEventListener() {} };
     globalThis.matchMedia = () => ({ matches: true });
     globalThis.performance = { now: () => 0 };
-    const runCase = (savedDial, explore = false) => {
+    globalThis.URL = { createObjectURL: blob => `blob:${blob._tag ?? 'audio'}`, revokeObjectURL() {} };
+    const makeFetch = (deferred = new Map()) => {
+      const fetched = [];
+      globalThis.fetch = url => {
+        fetched.push(String(url));
+        const file = String(url).split('/').pop();
+        const response = { ok: true, status: 200, arrayBuffer: () => Promise.resolve(new Uint8Array([1, 2, 3]).buffer) };
+        if (deferred.has(file)) return deferred.get(file).promise.then(() => response);
+        return Promise.resolve(response);
+      };
+      return fetched;
+    };
+    const runCase = async (savedDial, explore = false) => {
+      staticCtxMade = 0;
+      const fetched = makeFetch();
       const store = new Map(savedDial === null ? [] : [['mmm.radio', savedDial]]);
       globalThis.localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
       const radio = new RadioClass(stations, '/audio', start, 'mmm.radio');
       if (explore) radio.useReception(null);
       radio.setPlace(...blackstonePlace);
-      return { radio, store };
+      radio.start();
+      await tick(); await tick();
+      return { radio, store, fetched, staticCtxMade };
     };
     {
-      const { radio } = runCase(null);
+      const { radio, fetched, staticCtxMade: ctx } = await runCase(null);
       assert.equal(radio.tunedDial, '103.5', 'fresh player at /blackstone starts on 103.5');
       assert.equal(radio.reception.signal, 1); assert.equal(radio.reception.band, 'clear');
-      assert.equal(radio.reception.music, 1); assert.equal(radio.reception.hiss, 0); assert.equal(radio.reception.static, 0);
+      assert.equal(radio.reception.music, 1); assert.equal(radio.reception.hiss, 0);
+      assert.equal(radio.reception.static, 0); assert.equal(radio.reception.context, 'none');
+      assert.equal(ctx, 0, 'fresh start at /blackstone creates no static AudioContext or dial burst');
+      assert.deepEqual(fetched, ['/audio/' + trackFor('103.5')], 'fresh start fetches only 103.5');
+      assert.equal(radio.audio.paused, false, '103.5 audio starts playing');
+      assert.equal(radio.audio.muted, false, '103.5 audio is unmuted');
+      assert.equal(radio.audible, true, '103.5 is audible from startup');
       // Driving into the Glencoe hollow after startup keeps 103.5 on the dial and lets it fade to NO SIGNAL.
       radio.setPlace(...GLENCOE.Glencoe);
       assert.equal(radio.reception.band, 'lost', 'driving into the hollow fades to lost without changing the dial');
@@ -285,31 +323,60 @@ function startup(RadioClass = Radio) {
       assert.equal(radio.tunedDial, null);
     }
     {
-      const { radio, store } = runCase('92.5');
+      const { radio, store, fetched, staticCtxMade: ctx } = await runCase('92.5');
       assert.equal(radio.tunedDial, '103.5', 'saved out-of-range station falls back to 103.5 at /blackstone');
       assert.equal(radio.reception.music, 1); assert.equal(radio.reception.hiss, 0); assert.equal(radio.reception.static, 0);
+      assert.equal(ctx, 0, 'fallback creates no static AudioContext or dial burst');
+      assert.deepEqual(fetched, ['/audio/' + trackFor('103.5')], 'saved out-of-range station is never fetched when place is set first');
+      assert.equal(radio.audible, true, 'fallback 103.5 plays cleanly');
       assert.equal(store.get('mmm.radio'), '92.5', 'saved station is not overwritten in localStorage');
     }
     {
-      const { radio } = runCase('94.9');
+      // Late-placement safety: even if start() runs before setPlace(), fallback pauses/disowns the old fetch and plays 103.5 with no static burst.
+      staticCtxMade = 0;
+      let releaseOld;
+      const deferred = new Map([[trackFor('92.5'), { promise: new Promise(r => { releaseOld = r; }) }]]);
+      const fetched = makeFetch(deferred);
+      const store = new Map([['mmm.radio', '92.5']]);
+      globalThis.localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
+      const radio = new RadioClass(stations, '/audio', start, 'mmm.radio');
+      radio.start();
+      radio.setPlace(...blackstonePlace);
+      await tick(); await tick();
+      releaseOld();
+      await tick(); await tick();
+      assert.equal(radio.tunedDial, '103.5', 'late setPlace still falls back to 103.5');
+      assert.equal(staticCtxMade, 0, 'late setPlace plays no static burst');
+      assert.equal(radio.audible, true, 'late setPlace plays 103.5');
+      assert.equal(fetched.at(-1), '/audio/' + trackFor('103.5'), '103.5 track owns the player');
+      assert.equal(radio.songFile, trackFor('103.5'), 'stale 92.5 fetch cannot overwrite 103.5');
+    }
+    {
+      const { radio, fetched, staticCtxMade: ctx } = await runCase('94.9');
       assert.equal(radio.tunedDial, '94.9', 'saved clear station wins at /blackstone');
-      assert.equal(radio.reception.static, 0);
+      assert.equal(radio.reception.static, 0); assert.equal(ctx, 0);
+      assert.deepEqual(fetched, ['/audio/' + trackFor('94.9')]);
+      assert.equal(radio.audible, true);
     }
     {
-      const { radio } = runCase('off');
+      const { radio, fetched, staticCtxMade: ctx } = await runCase('off');
       assert.equal(radio.tunedDial, null, 'saved off stays off');
+      assert.deepEqual(fetched, [], 'saved off fetches nothing');
+      assert.equal(ctx, 0);
     }
     {
-      const { radio } = runCase('92.5', true);
+      const { radio, fetched, staticCtxMade: ctx } = await runCase('92.5', true);
       assert.equal(radio.tunedDial, '92.5', 'explore mode keeps any saved station');
-      assert.equal(radio.reception.signal, 1);
+      assert.equal(radio.reception.signal, 1); assert.equal(ctx, 0);
+      assert.deepEqual(fetched, ['/audio/' + trackFor('92.5')]);
+      assert.equal(radio.audible, true);
     }
   } finally {
     for (const [k, d] of Object.entries(savedGlobals)) { if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k]; }
   }
 }
 
-all(rules); wiring(); startup();
+all(rules); wiring(); await startup();
 console.log(`PASS radio reception: ${areas.length} villages, ${Object.keys(rules.RECEPTION.transmitters).length} transmitters, ${dials.length} stations`);
 for (const id of areas) console.log(`  ${id}: ${[talk, ...music(rules, village(id))].join(', ')}`);
 
@@ -360,6 +427,7 @@ if (process.argv.includes('--mutations')) {
     ['W2 the line is only a comment', s => s.replace(EXPLORE_LINE, `    // ${EXPLORE_LINE.trimStart()}`)],
     ['W3 the line runs before the radio is made', s => s.replace(EXPLORE_LINE, '').replace(made, EXPLORE_LINE + made)],
     ['W4 another line gives the radio a map again', s => s.replace(EXPLORE_LINE, `${EXPLORE_LINE}    radio?.useReception(RECEPTION);\n`)],
+    ['W5 initial place is not set before radio start', s => s.replace(`    ${PLACE_LINE}\n`, '')],
   ];
   for (const [name, mutate] of wiringMutants) {
     assert.ok(mainSource.split(EXPLORE_LINE).length === 2 && mainSource.split(made).length === 2, `${name}: anchor`);

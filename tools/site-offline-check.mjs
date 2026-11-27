@@ -27,7 +27,9 @@ try {
  }
  console.log('PASS radio policy for every area and requested era in both brands (unsupported eras fall back to today)');
  // The Party Line's calls for Get Fired (audio/calls.json, made by build_radio.py): the mail game's offline download holds them.
- const calls={dial:START_DIAL,calls:[{file:'talk-react-box-1.mp3',seconds:7,about:'box',caller:'theresa',name:false}],nicknames:[{file:'talk-nick-theresa-box-1.mp3',seconds:1.4,kind:'box',caller:'theresa',name:'Box Basher'}],gaps:{}};
+ const talkDial=PUBLIC_STATIONS.find(s=>s.tracks.some(t=>t.credit==='talk'))?.dial;
+ assert.ok(talkDial,'talk station exists in the public catalogue');
+ const calls={dial:talkDial,calls:[{file:'talk-react-box-1.mp3',seconds:7,about:'box',caller:'theresa',name:false}],nicknames:[{file:'talk-nick-theresa-box-1.mp3',seconds:1.4,kind:'box',caller:'theresa',name:'Box Basher'}],gaps:{}};
  const callFiles=calls.calls.concat(calls.nicknames).map(c=>'/audio/'+c.file);
  for(const part of ['terrain','audio','offline/icons']) mkdirSync(join(dir,part),{recursive:true});
  for(const [path,body] of [['app.js','globalThis.game=true'],['index.html','<html><head><title>Mabou Mail Madness</title><meta name="description" content="A rural mail route"><link rel="icon" href="old-icon"></head><body><div id="boot"><div><b>Mabou Mail Madness</b>Loading</div></div><script src="./app.js"></script></body></html>'],['terrain/manifest.json','{}'],['audio/radio.json',JSON.stringify({stations,start:START_DIAL})],['audio/radio-just.json',JSON.stringify({stations,start:plan.just_start})],['audio/calls.json',JSON.stringify(calls)],...calls.calls.concat(calls.nicknames).map(c=>['audio/'+c.file,'authored call']),...stations.flatMap(s=>s.tracks.map(t=>['audio/'+t.file,'authored audio'])),...['180','192','512'].map(n=>[`offline/icons/icon-${n}.png`,'icon']),['offline/icons/maskable-512.png','icon']]) writeFileSync(join(dir,path),body);
