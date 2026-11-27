@@ -1581,7 +1581,7 @@
       "wall": "#e2e4e1",
       "roof": "#9aa09c",
       "trim": "#f4f5f2",
-      "door": "#e8e7e0",
+      "door": "#adada7",
       "roofMaterial": "shingle"
     },
     "1342": {
@@ -1594,7 +1594,7 @@
       "wall": "#f3f2ec",
       "roof": "#c5c7c2",
       "trim": "#f6f5f0",
-      "door": "#e5e5dd",
+      "door": "#ababa5",
       "roofMaterial": "shingle"
     }
   }
