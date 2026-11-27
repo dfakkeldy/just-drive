@@ -91,6 +91,12 @@
       "roads": [
         "Hiram Street"
       ]
+    },
+    "hillcrest-drive": {
+      "label": "Hillcrest Drive",
+      "roads": [
+        "Hillcrest Drive"
+      ]
     }
   },
   "overrides": {
@@ -1594,6 +1600,56 @@
       "wall": "#f3f2ec",
       "roof": "#c5c7c2",
       "trim": "#f6f5f0",
+      "door": "#ababa5",
+      "roofMaterial": "shingle"
+    },
+    "1526": {
+      "group": "hillcrest-drive",
+      "road": "Hillcrest Drive",
+      "at": [
+        626901.22,
+        5053966.35
+      ],
+      "wall": "#8a9298",
+      "roof": "#3a4046",
+      "trim": "#f4f3ee",
+      "roofMaterial": "shingle"
+    },
+    "1527": {
+      "group": "hillcrest-drive",
+      "road": "Hillcrest Drive",
+      "at": [
+        626833.93,
+        5053967.72
+      ],
+      "wall": "#e4e0d6",
+      "roof": "#6a4534",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "2542": {
+      "group": "hillcrest-drive",
+      "road": "Hillcrest Drive",
+      "at": [
+        626838.22,
+        5053983.39
+      ],
+      "wall": "#e0dcd2",
+      "roof": "#6a4534",
+      "trim": "#f3f1ea",
+      "door": "#6f7371",
+      "roofMaterial": "shingle"
+    },
+    "1528": {
+      "group": "hillcrest-drive",
+      "road": "Hillcrest Drive",
+      "at": [
+        626805.83,
+        5054022.9
+      ],
+      "wall": "#d4c4b0",
+      "roof": "#a89888",
+      "trim": "#e6ddd2",
       "door": "#ababa5",
       "roofMaterial": "shingle"
     }
