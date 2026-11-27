@@ -55,6 +55,12 @@
       "roads": [
         "Philpott Street"
       ]
+    },
+    "crandall-drive": {
+      "label": "Crandall Drive",
+      "roads": [
+        "Crandall Drive"
+      ]
     }
   },
   "overrides": {
@@ -1298,6 +1304,55 @@
       ],
       "wall": "#ead8bc",
       "roof": "#6b4a32",
+      "roofMaterial": "shingle"
+    },
+    "1418": {
+      "group": "crandall-drive",
+      "road": "Crandall Drive",
+      "at": [
+        627957.6,
+        5053095.4
+      ],
+      "wall": "#8eacc4",
+      "roof": "#6a7278",
+      "trim": "#f4f6f8",
+      "roofMaterial": "shingle"
+    },
+    "1422": {
+      "group": "crandall-drive",
+      "road": "Crandall Drive",
+      "at": [
+        627972.8,
+        5053058.8
+      ],
+      "wall": "#c9d7e4",
+      "roof": "#8a9298",
+      "trim": "#f4f6f8",
+      "roofMaterial": "shingle"
+    },
+    "1427": {
+      "group": "crandall-drive",
+      "road": "Crandall Drive",
+      "at": [
+        628040.2,
+        5053010.9
+      ],
+      "wall": "#c4a46c",
+      "roof": "#3a322c",
+      "trim": "#3e342e",
+      "roofMaterial": "shingle"
+    },
+    "1432": {
+      "group": "crandall-drive",
+      "road": "Crandall Drive",
+      "at": [
+        628058.8,
+        5052994.8
+      ],
+      "wall": "#c4a46c",
+      "roof": "#3a322c",
+      "trim": "#3e342e",
+      "door": "#a6a6a1",
       "roofMaterial": "shingle"
     }
   }
