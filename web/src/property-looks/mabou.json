@@ -5671,7 +5671,7 @@
       "roofMaterial": "shingle",
       "shutters": true,
       "skirting": true,
-      "entrance": "deck",
+      "entrance": "small steps",
       "front": {
         "end": false,
         "side": 1
@@ -5689,7 +5689,6 @@
       "roof": "#4b5258",
       "trim": "#eeede8",
       "door": "#7c3034",
-      "roofMaterial": "metal",
       "chimney": true,
       "entrance": "small steps",
       "front": {
@@ -5710,11 +5709,7 @@
       "trim": "#f0f0ea",
       "door": "#ecebe4",
       "roofMaterial": "shingle",
-      "entrance": "deck",
-      "front": {
-        "end": false,
-        "side": 1
-      }
+      "entrance": "small steps"
     },
     "1125": {
       "group": "west-and-southwest-mabou",
@@ -5768,7 +5763,7 @@
       "door": "#ecebe4",
       "roofMaterial": "shingle",
       "chimney": true,
-      "entrance": "deck",
+      "entrance": "small steps",
       "front": {
         "end": true,
         "side": 1
@@ -5837,8 +5832,7 @@
       "wall": "#a63630",
       "roof": "#9aa0a2",
       "trim": "#dcdad2",
-      "door": "#a4a6a2",
-      "roofMaterial": "metal"
+      "door": "#a4a6a2"
     },
     "1378": {
       "group": "west-and-southwest-mabou",
@@ -5851,11 +5845,7 @@
       "roof": "#9da2a4",
       "trim": "#eceae2",
       "roofMaterial": "metal",
-      "entrance": "small steps",
-      "front": {
-        "end": false,
-        "side": -1
-      }
+      "entrance": "small steps"
     },
     "1572": {
       "group": "west-and-southwest-mabou",
@@ -5870,7 +5860,7 @@
       "trim": "#f0f0ea",
       "door": "#eeede7",
       "roofMaterial": "shingle",
-      "entrance": "deck",
+      "entrance": "small steps",
       "front": {
         "end": true,
         "side": 1
