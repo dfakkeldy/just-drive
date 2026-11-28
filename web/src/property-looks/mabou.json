@@ -5520,8 +5520,7 @@
       "trim": "#eeede7",
       "door": "#ecebe5",
       "roofMaterial": "shingle",
-      "entrance": "none",
-      "rollUpDoor": true
+      "entrance": "none"
     },
     "1266": {
       "group": "mabou-harbour-and-mines",
@@ -5580,8 +5579,7 @@
       "roof": "#42464a",
       "trim": "#f0f0ea",
       "door": "#ecece6",
-      "roofMaterial": "shingle",
-      "roofShape": "hip"
+      "roofMaterial": "shingle"
     },
     "1510": {
       "group": "mabou-harbour-and-mines",
@@ -5607,7 +5605,6 @@
       "roof": "#52575c",
       "trim": "#ecece6",
       "roofMaterial": "shingle",
-      "storeys": 2,
       "entrance": "front porch",
       "front": {
         "end": false,
@@ -5647,6 +5644,7 @@
         5105079.6
       ],
       "kind": "house",
+      "eave": 4.6,
       "wall": "#74797c",
       "roof": "#484b4e",
       "trim": "#ecece6",
