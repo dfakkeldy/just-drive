@@ -133,6 +133,12 @@
       "roads": [
         "Napean Street"
       ]
+    },
+    "water-street": {
+      "label": "Water Street",
+      "roads": [
+        "Water Street"
+      ]
     }
   },
   "overrides": {
@@ -1923,6 +1929,39 @@
       "wall": "#8f3b33",
       "roof": "#505154",
       "trim": "#e7e0d1"
+    },
+    "171": {
+      "group": "water-street",
+      "road": "Water Street",
+      "at": [
+        627712.14,
+        5052223.53
+      ],
+      "wall": "#ada18d",
+      "roof": "#545354",
+      "trim": "#dddcd4"
+    },
+    "749": {
+      "group": "water-street",
+      "road": "Water Street",
+      "at": [
+        627511.83,
+        5052498.45
+      ],
+      "wall": "#dedbd0",
+      "roof": "#625a56",
+      "trim": "#eeeae2"
+    },
+    "750": {
+      "group": "water-street",
+      "road": "Water Street",
+      "at": [
+        627506.34,
+        5052511.03
+      ],
+      "wall": "#ded6c0",
+      "roof": "#5b514e",
+      "trim": "#ebe6d8"
     }
   }
 }
