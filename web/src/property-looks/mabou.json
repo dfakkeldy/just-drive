@@ -75,24 +75,6 @@
     }
   },
   "overrides": {
-    "8": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        618685.9,
-        5104819.5
-      ],
-      "wall": "#a33d36",
-      "roof": "#6b4038",
-      "trim": "#c4a090",
-      "roofMaterial": "metal",
-      "metalCladding": true,
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
     "13": {
       "group": "mabou-village",
       "road": "Mabou Harbour Road",
@@ -110,45 +92,6 @@
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
-    },
-    "14": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        623448.1,
-        5104085.9
-      ],
-      "wall": "#376d84",
-      "roof": "#6d7275",
-      "trim": "#d6d8da",
-      "roofMaterial": "metal",
-      "metalCladding": true,
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "16": {
-      "group": "blackstone-and-mull-river",
-      "road": "Blackstone Road",
-      "at": [
-        631124.0,
-        5109772.8
-      ],
-      "wall": "#f4f2ec",
-      "roof": "#3c6e48",
-      "trim": "#f7f5ef",
-      "roofMaterial": "metal",
-      "door": "#2a2c2e",
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
     },
     "29": {
       "group": "mabou-village",
@@ -204,60 +147,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "46": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        627258.7,
-        5104189.9
-      ],
-      "wall": "#a33b32",
-      "roof": "#8f342e",
-      "trim": "#f4f1ea",
-      "roofMaterial": "metal",
-      "roofShape": "gambrel",
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "52": {
-      "group": "blackstone-and-mull-river",
-      "road": "Blackstone Road",
-      "at": [
-        630469.9,
-        5110298.3
-      ],
-      "wall": "#9ca2a6",
-      "roof": "#787e84",
-      "trim": "#e4e6e4",
-      "door": "#a8a18d",
-      "roofMaterial": "metal"
-    },
-    "57": {
-      "group": "blackstone-and-mull-river",
-      "road": "Mull River Road",
-      "at": [
-        628471.4,
-        5100468.3
-      ],
-      "wall": "#d4d2c8",
-      "roof": "#5c6164",
-      "trim": "#e4e2da",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
     "64": {
       "group": "mabou-village",
       "road": "Birch Street",
@@ -274,47 +163,6 @@
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
-    },
-    "69": {
-      "group": "highway-252-and-glendyer",
-      "road": "Lake Ainslie Chapel Road",
-      "at": [
-        631520.1,
-        5101179.6
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#8d877c",
-      "roof": "#405d49",
-      "trim": "#e2c04a",
-      "door": "#2c4d86",
-      "roofMaterial": "metal",
-      "storeys": 2
-    },
-    "73": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        618653.2,
-        5104764.4
-      ],
-      "wall": "#376d84",
-      "roof": "#8e9493",
-      "trim": "#d6d8da",
-      "roofMaterial": "metal",
-      "metalCladding": true,
-      "barnDoors": 1,
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": false,
-        "side": 1
-      }
     },
     "87": {
       "group": "mabou-village",
@@ -339,21 +187,6 @@
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
-    },
-    "88": {
-      "group": "other-mabou-roads",
-      "road": "Highland Street Extension",
-      "at": [
-        624339.6,
-        5103265.7
-      ],
-      "wall": "#e0c878",
-      "roof": "#3a3d40",
-      "trim": "#f7f5ef",
-      "roofMaterial": "shingle",
-      "roofShape": "gable",
-      "dormer": false,
-      "shutters": false
     },
     "89": {
       "group": "mabou-village",
@@ -446,419 +279,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "94": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        627017.3,
-        5108020.0
-      ],
-      "wall": "#8a8680",
-      "roof": "#3e4246",
-      "trim": "#e4e2da",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "95": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        628559.6,
-        5109799.4
-      ],
-      "wall": "#a33d36",
-      "roof": "#8e9493",
-      "roofMaterial": "metal",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "99": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625804.2,
-        5103998.8
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "front porch",
-      "front": {
-        "end": true,
-        "side": -1
-      },
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "100": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625770.1,
-        5104186.9
-      ],
-      "kind": "house",
-      "wall": "#a33d36",
-      "roof": "#8e9493",
-      "trim": "#f4f1ea",
-      "roofMaterial": "metal",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "101": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625796.9,
-        5104025.3
-      ],
-      "wall": "#9aa0a4",
-      "roof": "#4a4e52",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "104": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625502.6,
-        5103819.8
-      ],
-      "wall": "#dadcd8",
-      "roof": "#32689a",
-      "trim": "#ecece6",
-      "roofMaterial": "metal"
-    },
-    "106": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625769.1,
-        5104224.1
-      ],
-      "wall": "#636e79",
-      "roof": "#44484c",
-      "trim": "#f0efe9",
-      "roofMaterial": "shingle"
-    },
-    "108": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625675.5,
-        5103836.5
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 4.9,
-      "ridge": 6.6,
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "109": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625623.8,
-        5103803.7
-      ],
-      "kind": "house",
-      "wall": "#8e9498",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "deck",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "111": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        628476.7,
-        5109792.0
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#9aa09e",
-      "roofMaterial": "metal",
-      "storeys": 2,
-      "eave": 4.9,
-      "ridge": 6.8,
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "113": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        628374.7,
-        5109569.5
-      ],
-      "wall": "#e4d8c4",
-      "roof": "#3a3d40",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 4.9,
-      "ridge": 6.8,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "115": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        628753.2,
-        5110410.2
-      ],
-      "wall": "#3a4554",
-      "roof": "#43474b",
-      "trim": "#f0f0ea",
-      "door": "#adada7",
-      "roofMaterial": "shingle"
-    },
-    "116": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625842.3,
-        5104040.7
-      ],
-      "wall": "#a8aeb2",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "roofShape": "gable",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "117": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        627028.1,
-        5108040.4
-      ],
-      "wall": "#8a8680",
-      "roof": "#3e4246",
-      "trim": "#e4e2da",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "118": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        626348.3,
-        5105085.6
-      ],
-      "wall": "#e2e2da",
-      "roof": "#494f52",
-      "trim": "#f0efe9",
-      "roofMaterial": "shingle"
-    },
-    "120": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625579.3,
-        5103783.9
-      ],
-      "wall": "#e8e0c8",
-      "roof": "#4a4e52",
-      "roofMaterial": "shingle",
-      "entrance": "none",
-      "door": "#f2f1eb",
-      "rollUpDoor": true,
-      "front": {
-        "end": true,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "122": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625592.6,
-        5103792.5
-      ],
-      "kind": "house",
-      "wall": "#efe6c8",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "small steps",
-      "door": "#9c3230",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": true,
-      "satelliteDish": false
-    },
-    "123": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625649.2,
-        5103822.9
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "124": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625685.3,
-        5103872.4
-      ],
-      "kind": "house",
-      "wall": "#2c3540",
-      "roof": "#8e9493",
-      "roofMaterial": "metal",
-      "storeys": 1,
-      "entrance": "small steps",
-      "front": {
-        "end": true,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "125": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        628559.9,
-        5110077.0
-      ],
-      "wall": "#8e9498",
-      "roof": "#9aa09e",
-      "roofMaterial": "metal",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "126": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        628534.4,
-        5110074.9
-      ],
-      "wall": "#8a9095",
-      "roof": "#62676b",
-      "trim": "#ecece6",
-      "door": "#5d685f",
-      "roofMaterial": "shingle"
-    },
     "129": {
       "group": "mabou-village",
       "road": "Highway 19",
@@ -880,45 +300,6 @@
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
-    },
-    "132": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        623342.6,
-        5102606.5
-      ],
-      "wall": "#b4b8b6",
-      "roof": "#9aa09e",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "door": "#f2f1eb",
-      "rollUpDoor": true,
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "133": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        625609.1,
-        5103634.4
-      ],
-      "entrance": "none",
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#a08060",
-      "roof": "#3a3d40",
-      "trim": "#c4b49a",
-      "roofMaterial": "shingle",
-      "boardAndBatten": true
     },
     "135": {
       "group": "mabou-village",
@@ -989,36 +370,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "141": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        623485.0,
-        5104058.8
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#3e4144",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
-      "dormer": true,
-      "dormers": 1,
-      "entrance": "none",
-      "chimney": true,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "142": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        623453.7,
-        5102687.7
-      ],
-      "wall": "#ecece6",
-      "roof": "#7c8286",
-      "trim": "#f0efe9",
-      "roofMaterial": "shingle"
-    },
     "143": {
       "group": "mabou-village",
       "road": "Highway 19",
@@ -1040,19 +391,6 @@
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
-    },
-    "147": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        623484.5,
-        5103919.9
-      ],
-      "wall": "#dcd8c6",
-      "roof": "#505458",
-      "trim": "#ecebe4",
-      "roofMaterial": "shingle",
-      "storeys": 2
     },
     "148": {
       "group": "mabou-village",
@@ -1144,34 +482,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "153": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        625735.4,
-        5103494.2
-      ],
-      "entrance": "none",
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#f4f2ec",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "155": {
-      "group": "mabou-village",
-      "road": "Highway 19",
-      "at": [
-        623732.3,
-        5102938.7
-      ],
-      "wall": "#dfe3e4",
-      "roof": "#43474b",
-      "trim": "#f0efe9",
-      "roofMaterial": "shingle"
-    },
     "156": {
       "group": "mabou-village",
       "road": "Birch Street",
@@ -1215,18 +525,6 @@
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
-    },
-    "160": {
-      "group": "mabou-village",
-      "road": "Highway 19",
-      "at": [
-        623692.7,
-        5102949.6
-      ],
-      "wall": "#ecebe5",
-      "roof": "#43474b",
-      "trim": "#f0efe9",
-      "roofMaterial": "shingle"
     },
     "161": {
       "group": "mabou-village",
@@ -1321,28 +619,6 @@
       "chimney": false,
       "dormer": false,
       "shutters": true,
-      "satelliteDish": false
-    },
-    "166": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        623378.2,
-        5102640.2
-      ],
-      "wall": "#e4dcc4",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "roofShape": "gable",
-      "storeys": 1,
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
       "satelliteDish": false
     },
     "167": {
@@ -1491,55 +767,6 @@
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
-    },
-    "177": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        623406.4,
-        5104138.9
-      ],
-      "kind": "house",
-      "wall": "#e8e8e2",
-      "roof": "#464a4e",
-      "trim": "#f0f0ea",
-      "roofMaterial": "shingle",
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "dormer": true,
-      "dormers": 2
-    },
-    "178": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        625623.5,
-        5103589.3
-      ],
-      "entrance": "none",
-      "chimney": true,
-      "dormer": true,
-      "shutters": false,
-      "wall": "#3f342e",
-      "roof": "#2e3134",
-      "trim": "#6b5e54",
-      "roofMaterial": "shingle"
-    },
-    "179": {
-      "group": "mabou-village",
-      "road": "Highway 19",
-      "at": [
-        623713.1,
-        5102966.2
-      ],
-      "wall": "#d2d6d8",
-      "roof": "#4c5054",
-      "trim": "#ecece6",
-      "door": "#a6a6a1",
-      "roofMaterial": "shingle"
     },
     "180": {
       "group": "mabou-village",
@@ -1739,29 +966,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "195": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        623428.7,
-        5102671.6
-      ],
-      "wall": "#a33d36",
-      "roof": "#8a9094",
-      "trim": "#f4f1ea",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "door": "#f2f1eb",
-      "rollUpDoor": true,
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
     "196": {
       "group": "mabou-village",
       "road": "Highway 19",
@@ -1882,28 +1086,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "207": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        618247.1,
-        5097043.3
-      ],
-      "wall": "#3e4650",
-      "roof": "#6b4038",
-      "trim": "#f2f1eb",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
     "208": {
       "group": "mabou-village",
       "road": "Highway 19",
@@ -2015,18 +1197,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "215": {
-      "group": "mabou-village",
-      "road": "Highway 19",
-      "at": [
-        623605.2,
-        5102677.8
-      ],
-      "wall": "#94afa0",
-      "roof": "#6e7377",
-      "trim": "#ecece6",
-      "roofMaterial": "shingle"
-    },
     "216": {
       "group": "mabou-village",
       "road": "Birch Street",
@@ -2069,474 +1239,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "218": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        623158.9,
-        5104124.0
-      ],
-      "wall": "#7a8286",
-      "roof": "#5a5e62",
-      "trim": "#d6d8da",
-      "roofMaterial": "metal",
-      "metalCladding": true,
-      "door": "#ecece6",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "244": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621548.1,
-        5100553.2
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 4.9,
-      "ridge": 6.8,
-      "entrance": "deck",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "245": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        630319.1,
-        5100557.6
-      ],
-      "entrance": "none",
-      "chimney": true,
-      "dormer": true,
-      "shutters": false,
-      "wall": "#4e5964",
-      "roof": "#32363a",
-      "trim": "#f4f2ec",
-      "roofMaterial": "shingle",
-      "dormers": 2
-    },
-    "250": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        630369.3,
-        5100599.4
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#f4f2ec",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "252": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621568.4,
-        5100600.9
-      ],
-      "wall": "#d4d2cc",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "268": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        620512.4,
-        5099498.8
-      ],
-      "wall": "#4e6c82",
-      "roof": "#54595e",
-      "trim": "#ecece6",
-      "door": "#a8a18d",
-      "roofMaterial": "shingle"
-    },
-    "296": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621752.4,
-        5100878.4
-      ],
-      "wall": "#cab67c",
-      "roof": "#6e7275",
-      "trim": "#e8e6de",
-      "door": "#6f7371",
-      "roofMaterial": "shingle"
-    },
-    "297": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621774.5,
-        5100879.5
-      ],
-      "wall": "#964440",
-      "roof": "#7c8084",
-      "trim": "#ecebe6",
-      "door": "#5d6b71",
-      "roofMaterial": "metal"
-    },
-    "299": {
-      "group": "highway-252-and-glendyer",
-      "road": "Beaton Road",
-      "at": [
-        625932.9,
-        5100894.0
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#a33b32",
-      "roof": "#3a3d40",
-      "trim": "#f4f2ec",
-      "roofMaterial": "shingle"
-    },
-    "314": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        630584.5,
-        5100619.4
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#8a9aa6",
-      "roof": "#3a3d40",
-      "trim": "#f4f2ec",
-      "roofMaterial": "shingle"
-    },
-    "318": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        630670.0,
-        5100663.0
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": true,
-      "shutters": true,
-      "wall": "#f4f2ec",
-      "roof": "#5c6164",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "345": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621638.4,
-        5100711.4
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#c5c8c6",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "347": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621645.3,
-        5100734.1
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#9aa09e",
-      "roofMaterial": "metal",
-      "storeys": 2,
-      "eave": 5.0,
-      "ridge": 8.0,
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "365": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        629348.2,
-        5100761.7
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#f4f2ec",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "367": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        629315.7,
-        5100787.9
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#f4f2ec",
-      "roof": "#4a4e52",
-      "trim": "#f4f1ea",
-      "roofMaterial": "metal"
-    },
-    "372": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        630752.5,
-        5100813.2
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#c6a56a",
-      "roof": "#5a5e62",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "378": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        616787.9,
-        5096574.6
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#9aa09e",
-      "roofMaterial": "metal",
-      "storeys": 1,
-      "entrance": "none",
-      "door": "#f2f1eb",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "386": {
-      "group": "highway-252-and-glendyer",
-      "road": "MacLeods Road",
-      "at": [
-        625422.1,
-        5098793.2
-      ],
-      "entrance": "none",
-      "chimney": true,
-      "dormer": false,
-      "shutters": true,
-      "wall": "#3a3330",
-      "roof": "#984136",
-      "trim": "#6b5e54",
-      "roofMaterial": "metal"
-    },
-    "394": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        616401.1,
-        5096612.4
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#3a3d40",
-      "roofMaterial": "shingle",
-      "roofShape": "gable",
-      "storeys": 1,
-      "entrance": "deck",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "439": {
-      "group": "highway-252-and-glendyer",
-      "road": "MacLeods Road",
-      "at": [
-        624935.3,
-        5099135.4
-      ],
-      "entrance": "small steps",
-      "chimney": false,
-      "dormer": false,
-      "shutters": true,
-      "wall": "#c4a882",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "441": {
-      "group": "highway-252-and-glendyer",
-      "road": "MacLeods Road",
-      "at": [
-        624868.1,
-        5099156.0
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#9aa0a4",
-      "roof": "#3a3d40",
-      "trim": "#f4f2ec",
-      "roofMaterial": "shingle",
-      "storeys": 2
-    },
-    "459": {
-      "group": "highway-252-and-glendyer",
-      "road": "MacLeods Road",
-      "at": [
-        624713.5,
-        5099182.5
-      ],
-      "entrance": "none",
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#3a3330",
-      "roof": "#4a4e52",
-      "trim": "#6b6560",
-      "roofMaterial": "shingle"
-    },
-    "461": {
-      "group": "highway-252-and-glendyer",
-      "road": "MacLeods Road",
-      "at": [
-        624671.7,
-        5099191.4
-      ],
-      "entrance": "front porch",
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#3c3834",
-      "roof": "#3a3d40",
-      "trim": "#6b6560",
-      "roofMaterial": "shingle"
-    },
-    "473": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        616989.9,
-        5096846.0
-      ],
-      "wall": "#d4d2cc",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 4.9,
-      "ridge": 6.6,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "474": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        617218.7,
-        5096849.7
-      ],
-      "kind": "house",
-      "wall": "#5d7f9a",
-      "roof": "#d0d4d2",
-      "trim": "#f4f1ea",
-      "roofMaterial": "metal",
-      "storeys": 2,
-      "eave": 5.0,
-      "ridge": 7.0,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "478": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        617035.7,
-        5096878.4
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
     "483": {
       "group": "mabou-village",
       "road": "MacKillop Road",
@@ -2552,29 +1254,6 @@
       "skirting": true,
       "storeys": 1,
       "entrance": "small steps",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "501": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        619879.7,
-        5098011.2
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#4a4e52",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 5.0,
-      "ridge": 8.8,
-      "entrance": "none",
       "front": {
         "end": false,
         "side": -1
@@ -2601,52 +1280,6 @@
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
-    },
-    "524": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        622357.0,
-        5101693.0
-      ],
-      "wall": "#8f8377",
-      "roof": "#54585c",
-      "trim": "#e6e5de",
-      "roofMaterial": "shingle"
-    },
-    "532": {
-      "group": "west-and-southwest-mabou",
-      "road": "Little Mabou Road",
-      "at": [
-        616488.1,
-        5102852.8
-      ],
-      "wall": "#f4f2ec",
-      "roof": "#b0b4b2",
-      "trim": "#f0efe9",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "542": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        627141.2,
-        5103610.2
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#f4f2ec",
-      "roof": "#8e9493",
-      "trim": "#f4f1ea",
-      "door": "#a33b32",
-      "roofMaterial": "metal",
-      "roofShape": "gable"
     },
     "545": {
       "group": "mabou-village",
@@ -2692,76 +1325,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "574": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Mines Road",
-      "at": [
-        619098.9,
-        5110279.0
-      ],
-      "wall": "#e8e0c8",
-      "roof": "#d0d4d2",
-      "trim": "#e6e4dc",
-      "roofMaterial": "metal",
-      "entrance": "deck",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": false,
-        "side": 1
-      }
-    },
-    "583": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        622650.4,
-        5101849.1
-      ],
-      "wall": "#ecebe6",
-      "roof": "#8e332f",
-      "trim": "#f0efe9",
-      "door": "#6f7371",
-      "roofMaterial": "metal"
-    },
-    "609": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        618027.5,
-        5105247.9
-      ],
-      "wall": "#8c9091",
-      "roof": "#3e4144",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 4.8,
-      "ridge": 5.8,
-      "entrance": "deck",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": false,
-        "side": 1
-      }
-    },
-    "626": {
-      "group": "blackstone-and-mull-river",
-      "road": "Blackstone Road",
-      "at": [
-        630410.9,
-        5110301.2
-      ],
-      "wall": "#7e8992",
-      "roof": "#545a60",
-      "trim": "#eff0eb",
-      "roofMaterial": "metal"
-    },
     "644": {
       "group": "mabou-village",
       "road": "Highway 19",
@@ -2783,473 +1346,6 @@
       "entrance": "none",
       "chimney": false,
       "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "653": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        622109.8,
-        5104632.7
-      ],
-      "wall": "#567080",
-      "roof": "#43474b",
-      "trim": "#eeede7",
-      "door": "#eeede7",
-      "roofMaterial": "shingle",
-      "chimney": false
-    },
-    "660": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        627805.0,
-        5105279.0
-      ],
-      "wall": "#ecebe5",
-      "roof": "#3e4246",
-      "trim": "#f5f4ef",
-      "roofMaterial": "shingle"
-    },
-    "673": {
-      "group": "highway-252-and-glendyer",
-      "road": "Beaton Road",
-      "at": [
-        625618.4,
-        5101967.6
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#6e7d62",
-      "roof": "#8e9493",
-      "trim": "#f4f1ea",
-      "roofMaterial": "metal",
-      "metalCladding": true
-    },
-    "679": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        623979.7,
-        5101991.4
-      ],
-      "wall": "#8a8e90",
-      "roof": "#3d6f9a",
-      "trim": "#f4f1ea",
-      "roofMaterial": "metal",
-      "roofShape": "gable",
-      "entrance": "deck",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "705": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        622365.0,
-        5104694.0
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#8e9493",
-      "trim": "#5d7f9a",
-      "roofMaterial": "metal",
-      "door": "#5d7f9a",
-      "shutters": true,
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "satelliteDish": false
-    },
-    "719": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Mines Road",
-      "at": [
-        619214.8,
-        5110348.5
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#e4e6e4",
-      "trim": "#e6e4dc",
-      "roofMaterial": "metal",
-      "entrance": "deck",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": false,
-        "side": -1
-      }
-    },
-    "734": {
-      "group": "west-and-southwest-mabou",
-      "road": "Little Mabou Road",
-      "at": [
-        618965.9,
-        5103057.6
-      ],
-      "wall": "#f7f5f0",
-      "roof": "#e4e2dc",
-      "trim": "#f4f1ea",
-      "roofMaterial": "metal",
-      "roofShape": "flat",
-      "entrance": "deck",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "skirting": true,
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "kind": "house"
-    },
-    "740": {
-      "group": "west-and-southwest-mabou",
-      "road": "Little Mabou Road",
-      "at": [
-        618932.3,
-        5103076.8
-      ],
-      "wall": "#f4f2ec",
-      "roof": "#c5c8c6",
-      "trim": "#f0efe9",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "743": {
-      "group": "west-and-southwest-mabou",
-      "road": "Little Mabou Road",
-      "at": [
-        618477.0,
-        5103092.5
-      ],
-      "wall": "#c8bba6",
-      "roof": "#3e4144",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "755": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        620296.0,
-        5104737.9
-      ],
-      "wall": "#e5e5dd",
-      "roof": "#7a4640",
-      "trim": "#ecece6",
-      "roofMaterial": "metal"
-    },
-    "758": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        627847.6,
-        5105375.0
-      ],
-      "kind": "house",
-      "wall": "#f3f2ec",
-      "roof": "#45494b",
-      "trim": "#f7f6f1",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "deck",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "784": {
-      "group": "west-and-southwest-mabou",
-      "road": "Little Mabou Road",
-      "at": [
-        618623.4,
-        5103120.7
-      ],
-      "wall": "#243656",
-      "roof": "#323538",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "roofShape": "gable",
-      "storeys": 2,
-      "eave": 5.0,
-      "ridge": 7.0,
-      "entrance": "deck",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": true,
-      "dormer": false,
-      "shutters": false
-    },
-    "786": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        627802.6,
-        5103139.9
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#a33b32",
-      "roof": "#3a3d40",
-      "trim": "#f4f2ec",
-      "roofMaterial": "shingle"
-    },
-    "791": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        623468.4,
-        5103947.0
-      ],
-      "wall": "#4b89be",
-      "roof": "#4c5055",
-      "trim": "#f0f0ea",
-      "roofMaterial": "shingle",
-      "roofShape": "gable"
-    },
-    "804": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        630654.5,
-        5109374.1
-      ],
-      "wall": "#eeede7",
-      "roof": "#4a4e52",
-      "trim": "#f5f4ef",
-      "door": "#702e26",
-      "roofMaterial": "shingle",
-      "skirting": true
-    },
-    "814": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        627816.0,
-        5103157.9
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#a33b32",
-      "roof": "#4a4e52",
-      "trim": "#f4f2ec",
-      "roofMaterial": "metal",
-      "roofShape": "gambrel"
-    },
-    "826": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        623290.7,
-        5104005.8
-      ],
-      "wall": "#a33d36",
-      "roof": "#3e4144",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
-      "entrance": "front porch",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": false,
-        "side": -1
-      }
-    },
-    "834": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        628338.9,
-        5106419.0
-      ],
-      "wall": "#d5d8db",
-      "roof": "#8e9493",
-      "trim": "#e8e6e0",
-      "roofMaterial": "metal",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "843": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        630782.5,
-        5109423.5
-      ],
-      "wall": "#6f4539",
-      "roof": "#7e584c",
-      "trim": "#d8d4ca",
-      "door": "#685948",
-      "roofMaterial": "metal"
-    },
-    "874": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625815.6,
-        5104064.7
-      ],
-      "kind": "house",
-      "wall": "#e6e4dc",
-      "roof": "#9aa09e",
-      "roofMaterial": "metal",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "879": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        628388.8,
-        5106456.1
-      ],
-      "wall": "#5b6064",
-      "roof": "#505458",
-      "trim": "#f2f1ec",
-      "door": "#8f826b",
-      "roofMaterial": "shingle"
-    },
-    "880": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        628401.2,
-        5106461.7
-      ],
-      "wall": "#5b6064",
-      "roof": "#505458",
-      "trim": "#f2f1ec",
-      "door": "#404241",
-      "roofMaterial": "shingle"
-    },
-    "888": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        630053.0,
-        5108191.3
-      ],
-      "wall": "#e6e4d8",
-      "roof": "#8c908b",
-      "trim": "#f2f1ea",
-      "roofMaterial": "shingle"
-    },
-    "892": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        630818.4,
-        5109438.8
-      ],
-      "wall": "#a7adb0",
-      "roof": "#666c70",
-      "trim": "#e8e7e0",
-      "door": "#6a302a",
-      "roofMaterial": "metal"
-    },
-    "904": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621879.1,
-        5101043.4
-      ],
-      "wall": "#989ea2",
-      "roof": "#6c7175",
-      "trim": "#ecece6",
-      "door": "#a19a83",
-      "roofMaterial": "shingle"
-    },
-    "930": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        627251.1,
-        5104130.7
-      ],
-      "wall": "#f1f0ea",
-      "roof": "#65615c",
-      "trim": "#f7f6f1",
-      "door": "#a19a83",
-      "roofMaterial": "shingle"
-    },
-    "938": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        617567.7,
-        5105534.5
-      ],
-      "wall": "#e4d8c4",
-      "roof": "#3e4144",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "entrance": "none"
-    },
-    "950": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621885.7,
-        5101059.1
-      ],
-      "wall": "#d4c4a4",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "none",
-      "dormers": 2,
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": true,
-      "dormer": true,
       "shutters": false,
       "satelliteDish": false
     },
@@ -3276,61 +1372,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "977": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        622959.5,
-        5104174.5
-      ],
-      "wall": "#e4e4de",
-      "roof": "#4a4e52",
-      "trim": "#f0f0ea",
-      "roofMaterial": "shingle",
-      "entrance": "deck",
-      "dormer": false,
-      "shutters": false,
-      "chimney": true
-    },
-    "984": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        619317.5,
-        5104949.4
-      ],
-      "wall": "#ecece6",
-      "roof": "#3a3d40",
-      "trim": "#a33d36",
-      "roofMaterial": "shingle",
-      "door": "#a33d36",
-      "entrance": "small steps",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": true,
-        "side": 1
-      }
-    },
-    "997": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        630752.6,
-        5109534.9
-      ],
-      "wall": "#d4d08a",
-      "roof": "#585b5a",
-      "trim": "#f0eee6",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "skirting": true,
-      "chimney": true,
-      "dormer": false,
-      "shutters": false
-    },
     "1028": {
       "group": "mabou-village",
       "road": "Highway 19",
@@ -3352,349 +1393,6 @@
       "chimney": true,
       "shutters": false,
       "satelliteDish": false
-    },
-    "1048": {
-      "group": "highway-252-and-glendyer",
-      "road": "Glenora Falls Road",
-      "at": [
-        626657.6,
-        5107635.8
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#a33b32",
-      "roof": "#8e9493",
-      "trim": "#f4f2ec",
-      "roofMaterial": "metal",
-      "eave": 4.5,
-      "ridge": 8.0
-    },
-    "1058": {
-      "group": "highway-252-and-glendyer",
-      "road": "Beaton Road",
-      "at": [
-        625715.3,
-        5101273.8
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#c4b49a",
-      "roof": "#6b5344",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "1072": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        624014.2,
-        5102598.3
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#3e4144",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "deck",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": true,
-      "dormer": false,
-      "shutters": true
-    },
-    "1107": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Mines Road",
-      "at": [
-        619435.8,
-        5108984.8
-      ],
-      "wall": "#9aa0a4",
-      "roof": "#6d7275",
-      "trim": "#d4d6d3",
-      "roofMaterial": "metal",
-      "metalCladding": true,
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1108": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Mines Road",
-      "at": [
-        619418.4,
-        5108986.8
-      ],
-      "wall": "#b4b8b6",
-      "roof": "#8e9493",
-      "trim": "#d6d8da",
-      "roofMaterial": "metal",
-      "metalCladding": true,
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1118": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        622056.6,
-        5101332.7
-      ],
-      "wall": "#a8b0a4",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 5.0,
-      "ridge": 9.4,
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1121": {
-      "group": "highway-252-and-glendyer",
-      "road": "Beaton Road",
-      "at": [
-        625704.5,
-        5101362.5
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#d5d8d4",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "door": "#a33b32",
-      "roofMaterial": "shingle",
-      "roofShape": "gable"
-    },
-    "1126": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        623949.1,
-        5102631.4
-      ],
-      "kind": "house",
-      "wall": "#f0ece2",
-      "roof": "#4a4e52",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "attachedGarage": {
-        "end": false,
-        "side": 1,
-        "offset": -5.0,
-        "width": 3.2,
-        "doors": 1,
-        "door": "#eceae4"
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": true
-    },
-    "1127": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        624014.6,
-        5102640.0
-      ],
-      "wall": "#3c4148",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "door": "#a33d36",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 5.0,
-      "ridge": 6.6,
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1152": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        622997.6,
-        5104322.2
-      ],
-      "wall": "#d6d8d4",
-      "roof": "#565a5e",
-      "trim": "#ecece6",
-      "roofMaterial": "shingle"
-    },
-    "1155": {
-      "group": "west-and-southwest-mabou",
-      "road": "Murphys Hill Road",
-      "at": [
-        626841.2,
-        5104345.2
-      ],
-      "wall": "#f2f0ea",
-      "roof": "#d0d3d2",
-      "trim": "#f0efe9",
-      "roofMaterial": "metal",
-      "roofShape": "flat",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1163": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        618734.0,
-        5105065.0
-      ],
-      "wall": "#5e7486",
-      "roof": "#42464a",
-      "trim": "#f0f0ea",
-      "door": "#ecebe4",
-      "roofMaterial": "shingle",
-      "entrance": "small steps"
-    },
-    "1164": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        618881.1,
-        5105071.2
-      ],
-      "wall": "#d4d2cc",
-      "roof": "#9aa09e",
-      "trim": "#c8c4bc",
-      "roofMaterial": "metal",
-      "kind": "barn",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1179": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        622261.5,
-        5101493.0
-      ],
-      "wall": "#c8ccc9",
-      "roof": "#c4c8c5",
-      "trim": "#dadcd9",
-      "door": "#702e26",
-      "roofMaterial": "metal"
-    },
-    "1180": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        624160.5,
-        5101495.1
-      ],
-      "wall": "#2c4a3a",
-      "roof": "#6b5344",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1183": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        628309.8,
-        5102687.1
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#f4f2ec",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "1188": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        623952.2,
-        5102698.0
-      ],
-      "wall": "#b4332c",
-      "roof": "#8e9493",
-      "trim": "#f0efe9",
-      "door": "#f4f1ea",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "barnDoors": 2,
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "kind": "barn"
-    },
-    "1191": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        623943.4,
-        5102714.6
-      ],
-      "wall": "#d5d0c6",
-      "roof": "#323538",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 5.0,
-      "ridge": 7.4,
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "dormers": 1,
-      "chimney": true,
-      "dormer": true,
-      "shutters": false
     },
     "1197": {
       "group": "mabou-village",
@@ -3718,597 +1416,6 @@
       "shutters": true,
       "chimney": true,
       "dormer": false,
-      "satelliteDish": false
-    },
-    "1211": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        627616.0,
-        5105087.5
-      ],
-      "wall": "#833d32",
-      "roof": "#424648",
-      "trim": "#f2f0e8",
-      "roofMaterial": "shingle"
-    },
-    "1214": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        618614.8,
-        5105094.2
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#8e9493",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
-      "dormer": true,
-      "dormers": 1,
-      "entrance": "none",
-      "chimney": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1215": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        618597.6,
-        5105096.4
-      ],
-      "wall": "#e8e8e2",
-      "roof": "#4a4e52",
-      "trim": "#f0f0ea",
-      "roofMaterial": "shingle",
-      "chimney": true
-    },
-    "1216": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Mines Road",
-      "at": [
-        620401.5,
-        5105103.5
-      ],
-      "wall": "#ecece6",
-      "roof": "#d4d6d3",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
-      "chimney": true,
-      "entrance": "small steps",
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": true,
-        "side": -1
-      }
-    },
-    "1237": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        623936.4,
-        5102742.8
-      ],
-      "kind": "house",
-      "wall": "#f3efe4",
-      "roof": "#4a4e52",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "entrance": "deck",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "skirting": true,
-      "chimney": false,
-      "dormer": false,
-      "shutters": true
-    },
-    "1263": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        618460.1,
-        5105115.2
-      ],
-      "kind": "barn",
-      "wall": "#7b7d78",
-      "roof": "#4d4f52",
-      "trim": "#eeede7",
-      "door": "#ecebe5",
-      "roofMaterial": "shingle",
-      "entrance": "none"
-    },
-    "1266": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        618674.1,
-        5105148.1
-      ],
-      "kind": "house",
-      "wall": "#d6d5ce",
-      "roof": "#52565a",
-      "trim": "#ecece6",
-      "door": "#ecebe6",
-      "roofMaterial": "metal",
-      "skirting": true,
-      "storeys": 1,
-      "entrance": "small steps",
-      "front": {
-        "end": false,
-        "side": 1
-      }
-    },
-    "1271": {
-      "group": "blackstone-and-mull-river",
-      "road": "Blackstone Road",
-      "at": [
-        630407.3,
-        5110252.0
-      ],
-      "wall": "#dadcd9",
-      "roof": "#787e84",
-      "trim": "#ecebe6",
-      "door": "#adada7",
-      "roofMaterial": "metal"
-    },
-    "1273": {
-      "group": "highway-252-and-glendyer",
-      "road": "Beaton Road",
-      "at": [
-        625642.0,
-        5101610.0
-      ],
-      "entrance": "none",
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#e7e0cc",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "storeys": 2
-    },
-    "1279": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        624138.8,
-        5101644.1
-      ],
-      "wall": "#9ec0d4",
-      "roof": "#d8dce0",
-      "trim": "#f4f1ea",
-      "roofMaterial": "metal",
-      "roofShape": "flat",
-      "metalCladding": true,
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1284": {
-      "group": "mabou-village",
-      "road": "Highway 19",
-      "at": [
-        623797.1,
-        5102802.8
-      ],
-      "wall": "#a63632",
-      "roof": "#44484c",
-      "trim": "#f0efe9",
-      "door": "#a29d88",
-      "roofMaterial": "shingle"
-    },
-    "1318": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Mines Road",
-      "at": [
-        618983.3,
-        5109116.0
-      ],
-      "wall": "#7a8288",
-      "roof": "#3a3d40",
-      "trim": "#d4d6d3",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "entrance": "front porch",
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": true,
-        "side": 1
-      }
-    },
-    "1320": {
-      "group": "west-and-southwest-mabou",
-      "road": "MacDonald Glen Road",
-      "at": [
-        623455.5,
-        5105478.5
-      ],
-      "wall": "#d9d6ce",
-      "roof": "#3e4144",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": true,
-      "dormer": false,
-      "shutters": true
-    },
-    "1321": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        624654.7,
-        5099401.7
-      ],
-      "wall": "#a33d36",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 4.8,
-      "ridge": 6.6,
-      "entrance": "deck",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "dormers": 1,
-      "chimney": true,
-      "dormer": true,
-      "shutters": false
-    },
-    "1329": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        618207.2,
-        5097046.2
-      ],
-      "wall": "#4a5158",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "none",
-      "door": "#f2f1eb",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1334": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        623991.1,
-        5100820.8
-      ],
-      "wall": "#a33d36",
-      "roof": "#8e9493",
-      "trim": "#e6e2dc",
-      "door": "#c8c4bc",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "barnDoors": 1,
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1341": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        620503.9,
-        5099522.8
-      ],
-      "wall": "#4e6c82",
-      "roof": "#54595e",
-      "trim": "#ecece6",
-      "door": "#584a3b",
-      "roofMaterial": "shingle"
-    },
-    "1344": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621761.8,
-        5100893.5
-      ],
-      "wall": "#e4d7a4",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 4.9,
-      "ridge": 6.6,
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1346": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621786.1,
-        5100902.2
-      ],
-      "wall": "#a33d36",
-      "roof": "#5a5e62",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1347": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621706.2,
-        5100921.2
-      ],
-      "wall": "#6e8494",
-      "roof": "#8e9493",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "door": "#f2f1eb",
-      "rollUpDoor": true,
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1348": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        616096.6,
-        5096399.0
-      ],
-      "wall": "#cbb892",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 4.9,
-      "ridge": 6.6,
-      "entrance": "deck",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1354": {
-      "group": "blackstone-and-mull-river",
-      "road": "Mull River Road",
-      "at": [
-        627765.5,
-        5097283.4
-      ],
-      "wall": "#f3f2ec",
-      "roof": "#3e4246",
-      "trim": "#f7f6f1",
-      "roofMaterial": "shingle",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1358": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621480.3,
-        5100699.3
-      ],
-      "wall": "#e8e8e2",
-      "roof": "#45494d",
-      "trim": "#f0f0ea",
-      "door": "#877860",
-      "roofMaterial": "shingle"
-    },
-    "1359": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621446.0,
-        5100703.7
-      ],
-      "wall": "#e8e8e2",
-      "roof": "#45494d",
-      "trim": "#f0f0ea",
-      "door": "#787a76",
-      "roofMaterial": "shingle"
-    },
-    "1361": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        616101.6,
-        5096518.1
-      ],
-      "wall": "#6e5645",
-      "roof": "#54585c",
-      "trim": "#55483e",
-      "door": "#787a76",
-      "roofMaterial": "metal"
-    },
-    "1371": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        616171.6,
-        5096543.1
-      ],
-      "wall": "#ecebe6",
-      "roof": "#44484c",
-      "trim": "#f0efe9",
-      "roofMaterial": "shingle"
-    },
-    "1372": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        616304.0,
-        5096542.2
-      ],
-      "wall": "#a33d36",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 5.0,
-      "ridge": 7.6,
-      "entrance": "front porch",
-      "door": "#f2f1eb",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1379": {
-      "group": "highway-252-and-glendyer",
-      "road": "Whycocomagh Port Hood Road",
-      "at": [
-        625941.9,
-        5095512.1
-      ],
-      "entrance": "small steps",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#e4d3a8",
-      "roof": "#4a4e52",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "1381": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        616803.4,
-        5096597.9
-      ],
-      "wall": "#cbb892",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 4.8,
-      "ridge": 6.6,
-      "entrance": "front porch",
-      "dormers": 2,
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": true,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1383": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        619615.6,
-        5097583.6
-      ],
-      "kind": "house",
-      "wall": "#8d9478",
-      "roof": "#8e9493",
-      "roofMaterial": "metal",
-      "storeys": 2,
-      "eave": 5.0,
-      "ridge": 6.8,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1403": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        620391.8,
-        5099189.9
-      ],
-      "wall": "#e6dcc4",
-      "roof": "#8e9493",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "door": "#8d3530",
-      "front": {
-        "end": true,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1408": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        619867.3,
-        5097980.3
-      ],
-      "wall": "#a33d36",
-      "roof": "#8e9493",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "door": "#f2f1eb",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
       "satelliteDish": false
     },
     "1411": {
@@ -4401,22 +1508,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "1423": {
-      "group": "west-and-southwest-mabou",
-      "road": "Little Mabou Road",
-      "at": [
-        616442.0,
-        5102860.7
-      ],
-      "wall": "#f2f0ea",
-      "roof": "#8e9493",
-      "trim": "#f0efe9",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
     "1425": {
       "group": "mabou-village",
       "road": "Highway 19",
@@ -4429,63 +1520,6 @@
       "trim": "#dcded9",
       "roofMaterial": "metal",
       "roofShape": "gambrel",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1427": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        627111.8,
-        5103623.9
-      ],
-      "wall": "#e6e5de",
-      "roof": "#9aa09f",
-      "trim": "#f0efe8",
-      "roofMaterial": "shingle"
-    },
-    "1428": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        627159.0,
-        5103624.8
-      ],
-      "entrance": "none",
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#a33b32",
-      "roof": "#6e7370",
-      "trim": "#f4f2ec",
-      "roofMaterial": "metal"
-    },
-    "1435": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        628839.5,
-        5107088.4
-      ],
-      "wall": "#90969c",
-      "roof": "#505459",
-      "trim": "#f2f1ec",
-      "roofMaterial": "shingle"
-    },
-    "1455": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Mines Road",
-      "at": [
-        619336.2,
-        5110652.8
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#3e4144",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
       "entrance": "none",
       "chimney": false,
       "dormer": false,
@@ -4513,447 +1547,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "1466": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        622025.5,
-        5104637.0
-      ],
-      "wall": "#345864",
-      "roof": "#8e9493",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
-      "dormer": true,
-      "dormers": 1,
-      "entrance": "front porch",
-      "chimney": true,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": false,
-        "side": -1
-      }
-    },
-    "1473": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        628874.8,
-        5107167.0
-      ],
-      "wall": "#983b34",
-      "roof": "#9ea4a4",
-      "trim": "#ecebe4",
-      "door": "#ababa5",
-      "roofMaterial": "metal"
-    },
-    "1475": {
-      "group": "blackstone-and-mull-river",
-      "road": "Blackstone Road",
-      "at": [
-        630427.0,
-        5110336.5
-      ],
-      "wall": "#a6acb0",
-      "roof": "#585e64",
-      "trim": "#f0f0ea",
-      "roofMaterial": "shingle"
-    },
-    "1476": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Rankinville Road",
-      "at": [
-        625620.2,
-        5101989.4
-      ],
-      "wall": "#7c8b7f",
-      "roof": "#8e9493",
-      "trim": "#e6e4dc",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1486": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        622195.0,
-        5104677.5
-      ],
-      "wall": "#7d2d30",
-      "roof": "#484c50",
-      "trim": "#f0efe8",
-      "door": "#7d2d30",
-      "roofMaterial": "shingle"
-    },
-    "1487": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        621508.1,
-        5104679.7
-      ],
-      "wall": "#ecece6",
-      "roof": "#505458",
-      "trim": "#f0f0ea",
-      "roofMaterial": "shingle"
-    },
-    "1490": {
-      "group": "west-and-southwest-mabou",
-      "road": "Little Mabou Road",
-      "at": [
-        620633.1,
-        5102060.2
-      ],
-      "wall": "#a33d36",
-      "roof": "#8a8e90",
-      "trim": "#e8e4dc",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1496": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        620095.7,
-        5104716.5
-      ],
-      "wall": "#244749",
-      "roof": "#42464a",
-      "trim": "#f0f0ea",
-      "door": "#ecece6",
-      "roofMaterial": "shingle"
-    },
-    "1497": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        622871.1,
-        5104723.9
-      ],
-      "wall": "#385745",
-      "roof": "#3e4144",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
-      "door": "#a33d36",
-      "storeys": 2,
-      "eave": 5.0,
-      "entrance": "front porch",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": false,
-        "side": -1
-      }
-    },
-    "1506": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Rankinville Road",
-      "at": [
-        625826.3,
-        5102149.8
-      ],
-      "wall": "#a67c52",
-      "roof": "#3e4144",
-      "trim": "#e6dcc4",
-      "roofMaterial": "shingle",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1510": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        622548.0,
-        5104754.0
-      ],
-      "wall": "#5e7994",
-      "roof": "#505458",
-      "trim": "#eeede7",
-      "roofMaterial": "shingle"
-    },
-    "1511": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        620285.9,
-        5104759.4
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#d0d4d2",
-      "trim": "#e6e4dc",
-      "roofMaterial": "metal",
-      "metalCladding": true,
-      "barnDoors": 1,
-      "entrance": "none",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1526": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        628523.2,
-        5110040.8
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 1,
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1527": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        628791.0,
-        5110426.6
-      ],
-      "wall": "#4e5358",
-      "roof": "#b83634",
-      "trim": "#ecece6",
-      "roofMaterial": "metal"
-    },
-    "1536": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        627254.4,
-        5104084.5
-      ],
-      "wall": "#eae9e3",
-      "roof": "#825c51",
-      "trim": "#f3f2ec",
-      "roofMaterial": "metal"
-    },
-    "1537": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        622001.0,
-        5104866.3
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#8e9493",
-      "trim": "#e6e4dc",
-      "roofMaterial": "metal",
-      "entrance": "deck",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": false,
-        "side": 1
-      }
-    },
-    "1547": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        621890.3,
-        5101023.9
-      ],
-      "wall": "#aeb4b8",
-      "roof": "#707579",
-      "trim": "#ecece6",
-      "roofMaterial": "shingle"
-    },
-    "1550": {
-      "group": "west-and-southwest-mabou",
-      "road": "Little Mabou Road",
-      "at": [
-        620393.1,
-        5102385.5
-      ],
-      "wall": "#f4f2ec",
-      "roof": "#a33d36",
-      "trim": "#f0efe9",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1551": {
-      "group": "other-mabou-roads",
-      "road": "Highland Street Extension",
-      "at": [
-        624371.8,
-        5103265.7
-      ],
-      "wall": "#a2a5a0",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "roofShape": "gable",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1559": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        623127.9,
-        5104126.9
-      ],
-      "kind": "house",
-      "wall": "#636c74",
-      "roof": "#52575c",
-      "trim": "#ecece6",
-      "roofMaterial": "shingle",
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": -1
-      }
-    },
-    "1563": {
-      "group": "west-and-southwest-mabou",
-      "road": "MacDonald Glen Road",
-      "at": [
-        623523.2,
-        5105518.1
-      ],
-      "wall": "#b5a690",
-      "roof": "#5c6164",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "skirting": true,
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1564": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        617414.8,
-        5105527.2
-      ],
-      "wall": "#7a94a8",
-      "roof": "#3e4144",
-      "trim": "#d6d8da",
-      "roofMaterial": "shingle",
-      "kind": "house",
-      "storeys": 2,
-      "eave": 5.2,
-      "entrance": "deck",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": false,
-        "side": -1
-      }
-    },
-    "1566": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        624031.0,
-        5101057.2
-      ],
-      "wall": "#f4f1ea",
-      "roof": "#323538",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 5.2,
-      "ridge": 8.1,
-      "entrance": "front porch",
-      "front": {
-        "end": true,
-        "side": 1
-      },
-      "dormers": 1,
-      "skirting": true,
-      "chimney": false,
-      "dormer": true,
-      "shutters": false
-    },
-    "1567": {
-      "group": "highway-252-and-glendyer",
-      "road": "Beaton Road",
-      "at": [
-        625738.9,
-        5101066.6
-      ],
-      "entrance": "none",
-      "chimney": true,
-      "dormer": true,
-      "shutters": false,
-      "wall": "#b08968",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "dormers": 2
-    },
-    "1568": {
-      "group": "highway-252-and-glendyer",
-      "road": "Beaton Road",
-      "at": [
-        625726.1,
-        5101088.9
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#8a9094",
-      "roof": "#5c6164",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "1576": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        627659.5,
-        5103325.0
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#f4f2ec",
-      "roof": "#3d6a96",
-      "trim": "#f4f2ec",
-      "roofMaterial": "metal"
-    },
     "1579": {
       "group": "mabou-village",
       "road": "Highway 19",
@@ -4971,130 +1564,6 @@
         "side": 1
       },
       "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1585": {
-      "group": "west-and-southwest-mabou",
-      "road": "MacDonald Glen Road",
-      "at": [
-        623431.2,
-        5105559.7
-      ],
-      "wall": "#b5a690",
-      "roof": "#6e7370",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "entrance": "front porch",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": true,
-      "dormer": false,
-      "shutters": false
-    },
-    "1588": {
-      "group": "blackstone-and-mull-river",
-      "road": "Smithville Road",
-      "at": [
-        630086.6,
-        5108263.6
-      ],
-      "wall": "#e6e5de",
-      "roof": "#4c5054",
-      "trim": "#f4f3ed",
-      "roofMaterial": "shingle"
-    },
-    "1589": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        628445.9,
-        5109521.4
-      ],
-      "wall": "#d4cfc4",
-      "roof": "#3e4246",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 4.8,
-      "ridge": 6.4,
-      "entrance": "small steps",
-      "door": "#9c3230",
-      "front": {
-        "end": true,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1591": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        631626.9,
-        5101186.5
-      ],
-      "entrance": "front porch",
-      "chimney": false,
-      "dormer": true,
-      "shutters": false,
-      "wall": "#f4f2ec",
-      "roof": "#303639",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "1592": {
-      "group": "highway-252-and-glendyer",
-      "road": "Lake Ainslie Chapel Road",
-      "at": [
-        631520.8,
-        5101205.2
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": true,
-      "shutters": false,
-      "wall": "#6d8494",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "door": "#2c4d86",
-      "roofMaterial": "shingle"
-    },
-    "1593": {
-      "group": "highway-252-and-glendyer",
-      "road": "Lake Ainslie Chapel Road",
-      "at": [
-        631557.9,
-        5101212.7
-      ],
-      "entrance": "none",
-      "chimney": true,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#3f6b48",
-      "roof": "#a1483e",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle"
-    },
-    "1600": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Rankinville Road",
-      "at": [
-        624518.8,
-        5102540.0
-      ],
-      "wall": "#8c9091",
-      "roof": "#3e4144",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
-      "kind": "house",
-      "storeys": 2,
-      "entrance": "none",
-      "chimney": false,
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
@@ -5132,65 +1601,6 @@
       "trim": "#ecece6",
       "roofMaterial": "shingle",
       "entrance": "none",
-      "front": {
-        "end": true,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1608": {
-      "group": "highway-252-and-glendyer",
-      "road": "Highway 252",
-      "at": [
-        627432.2,
-        5103401.5
-      ],
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "wall": "#f4f2ec",
-      "roof": "#6e7370",
-      "trim": "#a33b32",
-      "roofMaterial": "shingle"
-    },
-    "1609": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        623012.5,
-        5104201.7
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#3e4144",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 5.0,
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1618": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        622033.3,
-        5101298.4
-      ],
-      "wall": "#9aada6",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 5.0,
-      "ridge": 8.0,
-      "entrance": "front porch",
       "front": {
         "end": true,
         "side": -1
@@ -5243,37 +1653,6 @@
         "end": false,
         "side": 1
       },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1625": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        619416.1,
-        5105006.4
-      ],
-      "wall": "#e6e6e0",
-      "roof": "#4c5054",
-      "trim": "#f0f0ea",
-      "roofMaterial": "shingle"
-    },
-    "1626": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        619449.9,
-        5105011.3
-      ],
-      "wall": "#e6e4dc",
-      "roof": "#6d7275",
-      "trim": "#e6e4dc",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 5.0,
-      "entrance": "none",
       "chimney": false,
       "dormer": false,
       "shutters": false,
@@ -5346,57 +1725,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "1649": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        618832.0,
-        5105045.2
-      ],
-      "wall": "#e6dcc4",
-      "roof": "#a33d36",
-      "trim": "#e6e4dc",
-      "roofMaterial": "metal",
-      "storeys": 2,
-      "eave": 5.0,
-      "entrance": "front porch",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": false,
-        "side": -1
-      }
-    },
-    "1652": {
-      "group": "blackstone-and-mull-river",
-      "road": "Northeast Mabou Road",
-      "at": [
-        623364.6,
-        5105062.4
-      ],
-      "wall": "#a33d36",
-      "roof": "#3a3d40",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1653": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        619074.5,
-        5105069.5
-      ],
-      "wall": "#8f2c30",
-      "roof": "#4c5156",
-      "trim": "#f0efe8",
-      "door": "#ecebe4",
-      "roofMaterial": "shingle"
-    },
     "1662": {
       "group": "mabou-village",
       "road": "Highway 19",
@@ -5464,146 +1792,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "1667": {
-      "group": "west-and-southwest-mabou",
-      "road": "Murphys Hill Road",
-      "at": [
-        626817.8,
-        5104361.6
-      ],
-      "wall": "#c8c6be",
-      "roof": "#7d8184",
-      "trim": "#e8e6e0",
-      "door": "#f2f0ea",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "barnDoors": 2,
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1668": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625904.9,
-        5104363.5
-      ],
-      "wall": "#8e9498",
-      "roof": "#8e9493",
-      "roofMaterial": "metal",
-      "storeys": 1,
-      "entrance": "none",
-      "door": "#f2f1eb",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1670": {
-      "group": "west-and-southwest-mabou",
-      "road": "Murphys Hill Road",
-      "at": [
-        626839.8,
-        5104388.9
-      ],
-      "wall": "#b7b3a8",
-      "roof": "#7d8184",
-      "trim": "#e8e6e0",
-      "door": "#f2f0ea",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "barnDoors": 2,
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1671": {
-      "group": "highway-19",
-      "road": "Highway 19",
-      "at": [
-        625931.0,
-        5104402.0
-      ],
-      "kind": "house",
-      "wall": "#8a9096",
-      "roof": "#3e4246",
-      "trim": "#f4f1ea",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "eave": 5.0,
-      "ridge": 7.2,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": -1
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
-    "1672": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Harbour Road",
-      "at": [
-        618493.8,
-        5105079.6
-      ],
-      "kind": "house",
-      "eave": 4.6,
-      "wall": "#74797c",
-      "roof": "#484b4e",
-      "trim": "#ecece6",
-      "roofMaterial": "shingle",
-      "storeys": 2,
-      "entrance": "small steps",
-      "front": {
-        "end": false,
-        "side": -1
-      }
-    },
-    "1673": {
-      "group": "blackstone-and-mull-river",
-      "road": "Northeast Mabou Road",
-      "at": [
-        623378.7,
-        5105083.4
-      ],
-      "wall": "#f4f2ec",
-      "roof": "#6e7370",
-      "trim": "#a33b32",
-      "roofMaterial": "shingle",
-      "roofShape": "gambrel",
-      "storeys": 1,
-      "entrance": "none",
-      "front": {
-        "end": false,
-        "side": 1
-      },
-      "attachedGarage": {
-        "end": false,
-        "side": 1,
-        "width": 3.2,
-        "doors": 1,
-        "door": "#a33b32"
-      },
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
     "1680": {
       "group": "mabou-village",
       "road": "Highway 19",
@@ -5627,30 +1815,6 @@
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
-    },
-    "1684": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Rankinville Road",
-      "at": [
-        624305.4,
-        5102774.6
-      ],
-      "wall": "#a67c52",
-      "roof": "#3e4144",
-      "trim": "#e6dcc4",
-      "roofMaterial": "shingle",
-      "door": "#ecece6",
-      "storeys": 2,
-      "eave": 4.8,
-      "entrance": "front porch",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false,
-      "front": {
-        "end": true,
-        "side": -1
-      }
     },
     "1685": {
       "group": "mabou-village",
@@ -5719,40 +1883,6 @@
       "shutters": false,
       "satelliteDish": false
     },
-    "1692": {
-      "group": "blackstone-and-mull-river",
-      "road": "Blackstone Road",
-      "at": [
-        631082.5,
-        5109752.5
-      ],
-      "wall": "#f4f2ec",
-      "roof": "#3c6e48",
-      "trim": "#f7f5ef",
-      "roofMaterial": "metal",
-      "eave": 5.0,
-      "ridge": 7.5,
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
-    },
-    "1693": {
-      "group": "mabou-harbour-and-mines",
-      "road": "Mabou Mines Road",
-      "at": [
-        619157.0,
-        5110238.0
-      ],
-      "wall": "#ecece6",
-      "roof": "#d4d6d3",
-      "trim": "#e6e4dc",
-      "roofMaterial": "metal",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false,
-      "satelliteDish": false
-    },
     "1697": {
       "group": "mabou-village",
       "road": "Highway 19",
@@ -5803,22 +1933,6 @@
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
-    },
-    "1700": {
-      "group": "west-and-southwest-mabou",
-      "road": "Southwest Ridge Road",
-      "at": [
-        623853.9,
-        5102827.9
-      ],
-      "wall": "#2a2e32",
-      "roof": "#3a3d40",
-      "trim": "#f0efe9",
-      "roofMaterial": "shingle",
-      "entrance": "none",
-      "chimney": false,
-      "dormer": false,
-      "shutters": false
     },
     "1704": {
       "group": "mabou-village",
@@ -5897,6 +2011,1142 @@
       "shutters": false,
       "satelliteDish": false
     },
+    "1348": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616096.6,
+        5096399.0
+      ],
+      "wall": "#cbb892",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.6,
+      "entrance": "deck",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1372": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616304.0,
+        5096542.2
+      ],
+      "wall": "#a33d36",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.6,
+      "entrance": "front porch",
+      "door": "#f2f1eb",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "394": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616401.1,
+        5096612.4
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3a3d40",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1381": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616803.4,
+        5096597.9
+      ],
+      "wall": "#cbb892",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.6,
+      "entrance": "front porch",
+      "dormers": 2,
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": true,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "378": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616787.9,
+        5096574.6
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "473": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616989.9,
+        5096846.0
+      ],
+      "wall": "#d4d2cc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.6,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "474": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        617218.7,
+        5096849.7
+      ],
+      "kind": "house",
+      "wall": "#5d7f9a",
+      "roof": "#d0d4d2",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.0,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "478": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        617035.7,
+        5096878.4
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "207": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        618247.1,
+        5097043.3
+      ],
+      "wall": "#3e4650",
+      "roof": "#6b4038",
+      "trim": "#f2f1eb",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1329": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        618207.2,
+        5097046.2
+      ],
+      "wall": "#4a5158",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1383": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        619615.6,
+        5097583.6
+      ],
+      "kind": "house",
+      "wall": "#8d9478",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 6.8,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1408": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        619867.3,
+        5097980.3
+      ],
+      "wall": "#a33d36",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "501": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        619879.7,
+        5098011.2
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#4a4e52",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 8.8,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1403": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        620391.8,
+        5099189.9
+      ],
+      "wall": "#e6dcc4",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "door": "#8d3530",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "244": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621548.1,
+        5100553.2
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.8,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "252": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621568.4,
+        5100600.9
+      ],
+      "wall": "#d4d2cc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "345": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621638.4,
+        5100711.4
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#c5c8c6",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "347": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621645.3,
+        5100734.1
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 8.0,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1347": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621706.2,
+        5100921.2
+      ],
+      "wall": "#6e8494",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "rollUpDoor": true,
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1344": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621761.8,
+        5100893.5
+      ],
+      "wall": "#e4d7a4",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.6,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1346": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621786.1,
+        5100902.2
+      ],
+      "wall": "#a33d36",
+      "roof": "#5a5e62",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "950": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621885.7,
+        5101059.1
+      ],
+      "wall": "#d4c4a4",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "dormers": 2,
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": true,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1618": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        622033.3,
+        5101298.4
+      ],
+      "wall": "#9aada6",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 8.0,
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1118": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        622056.6,
+        5101332.7
+      ],
+      "wall": "#a8b0a4",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 9.4,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "132": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623342.6,
+        5102606.5
+      ],
+      "wall": "#b4b8b6",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "rollUpDoor": true,
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "166": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623378.2,
+        5102640.2
+      ],
+      "wall": "#e4dcc4",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
+      "storeys": 1,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "195": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623428.7,
+        5102671.6
+      ],
+      "wall": "#a33d36",
+      "roof": "#8a9094",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "rollUpDoor": true,
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "120": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625579.3,
+        5103783.9
+      ],
+      "wall": "#e8e0c8",
+      "roof": "#4a4e52",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "rollUpDoor": true,
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "122": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625592.6,
+        5103792.5
+      ],
+      "kind": "house",
+      "wall": "#efe6c8",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "small steps",
+      "door": "#9c3230",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": true,
+      "satelliteDish": false
+    },
+    "109": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625623.8,
+        5103803.7
+      ],
+      "kind": "house",
+      "wall": "#8e9498",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "123": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625649.2,
+        5103822.9
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "108": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625675.5,
+        5103836.5
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.6,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "124": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625685.3,
+        5103872.4
+      ],
+      "kind": "house",
+      "wall": "#2c3540",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "100": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625770.1,
+        5104186.9
+      ],
+      "kind": "house",
+      "wall": "#a33d36",
+      "roof": "#8e9493",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "101": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625796.9,
+        5104025.3
+      ],
+      "wall": "#9aa0a4",
+      "roof": "#4a4e52",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "99": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625804.2,
+        5103998.8
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "116": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625842.3,
+        5104040.7
+      ],
+      "wall": "#a8aeb2",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "874": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625815.6,
+        5104064.7
+      ],
+      "kind": "house",
+      "wall": "#e6e4dc",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1668": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625904.9,
+        5104363.5
+      ],
+      "wall": "#8e9498",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
+      "door": "#f2f1eb",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1671": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625931.0,
+        5104402.0
+      ],
+      "kind": "house",
+      "wall": "#8a9096",
+      "roof": "#3e4246",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.2,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "94": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        627017.3,
+        5108020.0
+      ],
+      "wall": "#8a8680",
+      "roof": "#3e4246",
+      "trim": "#e4e2da",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "117": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        627028.1,
+        5108040.4
+      ],
+      "wall": "#8a8680",
+      "roof": "#3e4246",
+      "trim": "#e4e2da",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "113": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628374.7,
+        5109569.5
+      ],
+      "wall": "#e4d8c4",
+      "roof": "#3a3d40",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.8,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1589": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628445.9,
+        5109521.4
+      ],
+      "wall": "#d4cfc4",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.4,
+      "entrance": "small steps",
+      "door": "#9c3230",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "111": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628476.7,
+        5109792.0
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "storeys": 2,
+      "eave": 4.9,
+      "ridge": 6.8,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1526": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628523.2,
+        5110040.8
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4246",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "125": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628559.9,
+        5110077.0
+      ],
+      "wall": "#8e9498",
+      "roof": "#9aa09e",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "95": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628559.6,
+        5109799.4
+      ],
+      "wall": "#a33d36",
+      "roof": "#8e9493",
+      "roofMaterial": "metal",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1564": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        617414.8,
+        5105527.2
+      ],
+      "wall": "#7a94a8",
+      "roof": "#3e4144",
+      "trim": "#d6d8da",
+      "roofMaterial": "shingle",
+      "kind": "house",
+      "storeys": 2,
+      "eave": 5.2,
+      "entrance": "deck",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "938": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        617567.7,
+        5105534.5
+      ],
+      "wall": "#e4d8c4",
+      "roof": "#3e4144",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "entrance": "none"
+    },
+    "609": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618027.5,
+        5105247.9
+      ],
+      "wall": "#8c9091",
+      "roof": "#3e4144",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 5.8,
+      "entrance": "deck",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": false,
+        "side": 1
+      }
+    },
     "1710": {
       "group": "mabou-harbour-and-mines",
       "road": "Mabou Harbour Road",
@@ -5913,6 +3163,1079 @@
       "dormer": false,
       "shutters": false,
       "satelliteDish": false
+    },
+    "73": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618653.2,
+        5104764.4
+      ],
+      "wall": "#376d84",
+      "roof": "#8e9493",
+      "trim": "#d6d8da",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "barnDoors": 1,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": false,
+        "side": 1
+      }
+    },
+    "8": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618685.9,
+        5104819.5
+      ],
+      "wall": "#a33d36",
+      "roof": "#6b4038",
+      "trim": "#c4a090",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1649": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618832.0,
+        5105045.2
+      ],
+      "wall": "#e6dcc4",
+      "roof": "#a33d36",
+      "trim": "#e6e4dc",
+      "roofMaterial": "metal",
+      "storeys": 2,
+      "eave": 5.0,
+      "entrance": "front porch",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "984": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        619317.5,
+        5104949.4
+      ],
+      "wall": "#ecece6",
+      "roof": "#3a3d40",
+      "trim": "#a33d36",
+      "roofMaterial": "shingle",
+      "door": "#a33d36",
+      "entrance": "small steps",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": true,
+        "side": 1
+      }
+    },
+    "1626": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        619449.9,
+        5105011.3
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#6d7275",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1511": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        620285.9,
+        5104759.4
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#d0d4d2",
+      "trim": "#e6e4dc",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "barnDoors": 1,
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1164": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618881.1,
+        5105071.2
+      ],
+      "wall": "#d4d2cc",
+      "roof": "#9aa09e",
+      "trim": "#c8c4bc",
+      "roofMaterial": "metal",
+      "kind": "barn",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1214": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618614.8,
+        5105094.2
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#8e9493",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "dormer": true,
+      "dormers": 1,
+      "entrance": "none",
+      "chimney": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1466": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622025.5,
+        5104637.0
+      ],
+      "wall": "#345864",
+      "roof": "#8e9493",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "dormer": true,
+      "dormers": 1,
+      "entrance": "front porch",
+      "chimney": true,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "1537": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622001.0,
+        5104866.3
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#8e9493",
+      "trim": "#e6e4dc",
+      "roofMaterial": "metal",
+      "entrance": "deck",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": false,
+        "side": 1
+      }
+    },
+    "705": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622365.0,
+        5104694.0
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#8e9493",
+      "trim": "#5d7f9a",
+      "roofMaterial": "metal",
+      "door": "#5d7f9a",
+      "shutters": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "satelliteDish": false
+    },
+    "1497": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622871.1,
+        5104723.9
+      ],
+      "wall": "#385745",
+      "roof": "#3e4144",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "door": "#a33d36",
+      "storeys": 2,
+      "eave": 5.0,
+      "entrance": "front porch",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "826": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623290.7,
+        5104005.8
+      ],
+      "wall": "#a33d36",
+      "roof": "#3e4144",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "14": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623448.1,
+        5104085.9
+      ],
+      "wall": "#376d84",
+      "roof": "#6d7275",
+      "trim": "#d6d8da",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "141": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623485.0,
+        5104058.8
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4144",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "dormer": true,
+      "dormers": 1,
+      "entrance": "none",
+      "chimney": true,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1609": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623012.5,
+        5104201.7
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4144",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "218": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623158.9,
+        5104124.0
+      ],
+      "wall": "#7a8286",
+      "roof": "#5a5e62",
+      "trim": "#d6d8da",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "door": "#ecece6",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1318": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Mines Road",
+      "at": [
+        618983.3,
+        5109116.0
+      ],
+      "wall": "#7a8288",
+      "roof": "#3a3d40",
+      "trim": "#d4d6d3",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "entrance": "front porch",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": true,
+        "side": 1
+      }
+    },
+    "574": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Mines Road",
+      "at": [
+        619098.9,
+        5110279.0
+      ],
+      "wall": "#e8e0c8",
+      "roof": "#d0d4d2",
+      "trim": "#e6e4dc",
+      "roofMaterial": "metal",
+      "entrance": "deck",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": false,
+        "side": 1
+      }
+    },
+    "1693": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Mines Road",
+      "at": [
+        619157.0,
+        5110238.0
+      ],
+      "wall": "#ecece6",
+      "roof": "#d4d6d3",
+      "trim": "#e6e4dc",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "719": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Mines Road",
+      "at": [
+        619214.8,
+        5110348.5
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#e4e6e4",
+      "trim": "#e6e4dc",
+      "roofMaterial": "metal",
+      "entrance": "deck",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "1455": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Mines Road",
+      "at": [
+        619336.2,
+        5110652.8
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4144",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1108": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Mines Road",
+      "at": [
+        619418.4,
+        5108986.8
+      ],
+      "wall": "#b4b8b6",
+      "roof": "#8e9493",
+      "trim": "#d6d8da",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1107": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Mines Road",
+      "at": [
+        619435.8,
+        5108984.8
+      ],
+      "wall": "#9aa0a4",
+      "roof": "#6d7275",
+      "trim": "#d4d6d3",
+      "roofMaterial": "metal",
+      "metalCladding": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1216": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Mines Road",
+      "at": [
+        620401.5,
+        5105103.5
+      ],
+      "wall": "#ecece6",
+      "roof": "#d4d6d3",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "chimney": true,
+      "entrance": "small steps",
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": true,
+        "side": -1
+      }
+    },
+    "1684": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Rankinville Road",
+      "at": [
+        624305.4,
+        5102774.6
+      ],
+      "wall": "#a67c52",
+      "roof": "#3e4144",
+      "trim": "#e6dcc4",
+      "roofMaterial": "shingle",
+      "door": "#ecece6",
+      "storeys": 2,
+      "eave": 4.8,
+      "entrance": "front porch",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false,
+      "front": {
+        "end": true,
+        "side": -1
+      }
+    },
+    "1600": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Rankinville Road",
+      "at": [
+        624518.8,
+        5102540.0
+      ],
+      "wall": "#8c9091",
+      "roof": "#3e4144",
+      "trim": "#e6e4dc",
+      "roofMaterial": "shingle",
+      "kind": "house",
+      "storeys": 2,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1476": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Rankinville Road",
+      "at": [
+        625620.2,
+        5101989.4
+      ],
+      "wall": "#7c8b7f",
+      "roof": "#8e9493",
+      "trim": "#e6e4dc",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "1506": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Rankinville Road",
+      "at": [
+        625826.3,
+        5102149.8
+      ],
+      "wall": "#a67c52",
+      "roof": "#3e4144",
+      "trim": "#e6dcc4",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "satelliteDish": false
+    },
+    "784": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        618623.4,
+        5103120.7
+      ],
+      "wall": "#243656",
+      "roof": "#323538",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.0,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false
+    },
+    "1585": {
+      "group": "west-and-southwest-mabou",
+      "road": "MacDonald Glen Road",
+      "at": [
+        623431.2,
+        5105559.7
+      ],
+      "wall": "#b5a690",
+      "roof": "#6e7370",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": false
+    },
+    "1320": {
+      "group": "west-and-southwest-mabou",
+      "road": "MacDonald Glen Road",
+      "at": [
+        623455.5,
+        5105478.5
+      ],
+      "wall": "#d9d6ce",
+      "roof": "#3e4144",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": true
+    },
+    "1563": {
+      "group": "west-and-southwest-mabou",
+      "road": "MacDonald Glen Road",
+      "at": [
+        623523.2,
+        5105518.1
+      ],
+      "wall": "#b5a690",
+      "roof": "#5c6164",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "skirting": true,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "743": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        618477.0,
+        5103092.5
+      ],
+      "wall": "#c8bba6",
+      "roof": "#3e4144",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "532": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        616488.1,
+        5102852.8
+      ],
+      "wall": "#f4f2ec",
+      "roof": "#b0b4b2",
+      "trim": "#f0efe9",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1423": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        616442.0,
+        5102860.7
+      ],
+      "wall": "#f2f0ea",
+      "roof": "#8e9493",
+      "trim": "#f0efe9",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "740": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        618932.3,
+        5103076.8
+      ],
+      "wall": "#f4f2ec",
+      "roof": "#c5c8c6",
+      "trim": "#f0efe9",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "734": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        618965.9,
+        5103057.6
+      ],
+      "wall": "#f7f5f0",
+      "roof": "#e4e2dc",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "roofShape": "flat",
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "skirting": true,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "kind": "house"
+    },
+    "1550": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        620393.1,
+        5102385.5
+      ],
+      "wall": "#f4f2ec",
+      "roof": "#a33d36",
+      "trim": "#f0efe9",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1490": {
+      "group": "west-and-southwest-mabou",
+      "road": "Little Mabou Road",
+      "at": [
+        620633.1,
+        5102060.2
+      ],
+      "wall": "#a33d36",
+      "roof": "#8a8e90",
+      "trim": "#e8e4dc",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1667": {
+      "group": "west-and-southwest-mabou",
+      "road": "Murphys Hill Road",
+      "at": [
+        626817.8,
+        5104361.6
+      ],
+      "wall": "#c8c6be",
+      "roof": "#7d8184",
+      "trim": "#e8e6e0",
+      "door": "#f2f0ea",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "barnDoors": 2,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1670": {
+      "group": "west-and-southwest-mabou",
+      "road": "Murphys Hill Road",
+      "at": [
+        626839.8,
+        5104388.9
+      ],
+      "wall": "#b7b3a8",
+      "roof": "#7d8184",
+      "trim": "#e8e6e0",
+      "door": "#f2f0ea",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "barnDoors": 2,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1155": {
+      "group": "west-and-southwest-mabou",
+      "road": "Murphys Hill Road",
+      "at": [
+        626841.2,
+        5104345.2
+      ],
+      "wall": "#f2f0ea",
+      "roof": "#d0d3d2",
+      "trim": "#f0efe9",
+      "roofMaterial": "metal",
+      "roofShape": "flat",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1700": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623853.9,
+        5102827.9
+      ],
+      "wall": "#2a2e32",
+      "roof": "#3a3d40",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1191": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623943.4,
+        5102714.6
+      ],
+      "wall": "#d5d0c6",
+      "roof": "#323538",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 7.4,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "dormers": 1,
+      "chimney": true,
+      "dormer": true,
+      "shutters": false
+    },
+    "1237": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623936.4,
+        5102742.8
+      ],
+      "kind": "house",
+      "wall": "#f3efe4",
+      "roof": "#4a4e52",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "skirting": true,
+      "chimney": false,
+      "dormer": false,
+      "shutters": true
+    },
+    "1188": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623952.2,
+        5102698.0
+      ],
+      "wall": "#b4332c",
+      "roof": "#8e9493",
+      "trim": "#f0efe9",
+      "door": "#f4f1ea",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "barnDoors": 2,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "kind": "barn"
+    },
+    "1126": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623949.1,
+        5102631.4
+      ],
+      "kind": "house",
+      "wall": "#f0ece2",
+      "roof": "#4a4e52",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "attachedGarage": {
+        "end": false,
+        "side": 1,
+        "offset": -5.0,
+        "width": 3.2,
+        "doors": 1,
+        "door": "#eceae4"
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": true
+    },
+    "1127": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624014.6,
+        5102640.0
+      ],
+      "wall": "#3c4148",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "door": "#a33d36",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.0,
+      "ridge": 6.6,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1072": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624014.2,
+        5102598.3
+      ],
+      "wall": "#e6e4dc",
+      "roof": "#3e4144",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": true,
+      "dormer": false,
+      "shutters": true
+    },
+    "679": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623979.7,
+        5101991.4
+      ],
+      "wall": "#8a8e90",
+      "roof": "#3d6f9a",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "roofShape": "gable",
+      "entrance": "deck",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1334": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623991.1,
+        5100820.8
+      ],
+      "wall": "#a33d36",
+      "roof": "#8e9493",
+      "trim": "#e6e2dc",
+      "door": "#c8c4bc",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "barnDoors": 1,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1566": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624031.0,
+        5101057.2
+      ],
+      "wall": "#f4f1ea",
+      "roof": "#323538",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 5.2,
+      "ridge": 8.1,
+      "entrance": "front porch",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "dormers": 1,
+      "skirting": true,
+      "chimney": false,
+      "dormer": true,
+      "shutters": false
     },
     "900001": {
       "group": "west-and-southwest-mabou",
@@ -5933,6 +4256,867 @@
         "end": false,
         "side": 1
       },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1279": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624138.8,
+        5101644.1
+      ],
+      "wall": "#9ec0d4",
+      "roof": "#d8dce0",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "roofShape": "flat",
+      "metalCladding": true,
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1180": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624160.5,
+        5101495.1
+      ],
+      "wall": "#2c4a3a",
+      "roof": "#6b5344",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1321": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624654.7,
+        5099401.7
+      ],
+      "wall": "#a33d36",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "eave": 4.8,
+      "ridge": 6.6,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "dormers": 1,
+      "chimney": true,
+      "dormer": true,
+      "shutters": false
+    },
+    "16": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        631124.0,
+        5109772.8
+      ],
+      "wall": "#f4f2ec",
+      "roof": "#3c6e48",
+      "trim": "#f7f5ef",
+      "roofMaterial": "metal",
+      "door": "#2a2c2e",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "46": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627258.7,
+        5104189.9
+      ],
+      "wall": "#a33b32",
+      "roof": "#8f342e",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "roofShape": "gambrel",
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": -1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "57": {
+      "group": "blackstone-and-mull-river",
+      "road": "Mull River Road",
+      "at": [
+        628471.4,
+        5100468.3
+      ],
+      "wall": "#d4d2c8",
+      "roof": "#5c6164",
+      "trim": "#e4e2da",
+      "roofMaterial": "metal",
+      "entrance": "none",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "758": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627847.6,
+        5105375.0
+      ],
+      "kind": "house",
+      "wall": "#f3f2ec",
+      "roof": "#45494b",
+      "trim": "#f7f6f1",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "entrance": "deck",
+      "front": {
+        "end": true,
+        "side": 1
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "834": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        628338.9,
+        5106419.0
+      ],
+      "wall": "#d5d8db",
+      "roof": "#8e9493",
+      "trim": "#e8e6e0",
+      "roofMaterial": "metal",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "997": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630752.6,
+        5109534.9
+      ],
+      "wall": "#d4d08a",
+      "roof": "#585b5a",
+      "trim": "#f0eee6",
+      "roofMaterial": "shingle",
+      "storeys": 1,
+      "skirting": true,
+      "chimney": true,
+      "dormer": false,
+      "shutters": false
+    },
+    "1354": {
+      "group": "blackstone-and-mull-river",
+      "road": "Mull River Road",
+      "at": [
+        627765.5,
+        5097283.4
+      ],
+      "wall": "#f3f2ec",
+      "roof": "#3e4246",
+      "trim": "#f7f6f1",
+      "roofMaterial": "shingle",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1652": {
+      "group": "blackstone-and-mull-river",
+      "road": "Northeast Mabou Road",
+      "at": [
+        623364.6,
+        5105062.4
+      ],
+      "wall": "#a33d36",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1673": {
+      "group": "blackstone-and-mull-river",
+      "road": "Northeast Mabou Road",
+      "at": [
+        623378.7,
+        5105083.4
+      ],
+      "wall": "#f4f2ec",
+      "roof": "#6e7370",
+      "trim": "#a33b32",
+      "roofMaterial": "shingle",
+      "roofShape": "gambrel",
+      "storeys": 1,
+      "entrance": "none",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "attachedGarage": {
+        "end": false,
+        "side": 1,
+        "width": 3.2,
+        "doors": 1,
+        "door": "#a33b32"
+      },
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "1692": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        631082.5,
+        5109752.5
+      ],
+      "wall": "#f4f2ec",
+      "roof": "#3c6e48",
+      "trim": "#f7f5ef",
+      "roofMaterial": "metal",
+      "eave": 5.0,
+      "ridge": 7.5,
+      "chimney": false,
+      "dormer": false,
+      "shutters": false
+    },
+    "673": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625618.4,
+        5101967.6
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#6e7d62",
+      "roof": "#8e9493",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal",
+      "metalCladding": true
+    },
+    "1121": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625704.5,
+        5101362.5
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#d5d8d4",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "door": "#a33b32",
+      "roofMaterial": "shingle",
+      "roofShape": "gable"
+    },
+    "1273": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625642.0,
+        5101610.0
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#e7e0cc",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "storeys": 2
+    },
+    "1058": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625715.3,
+        5101273.8
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#c4b49a",
+      "roof": "#6b5344",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "1568": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625726.1,
+        5101088.9
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#8a9094",
+      "roof": "#5c6164",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "1567": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625738.9,
+        5101066.6
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": true,
+      "shutters": false,
+      "wall": "#b08968",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "dormers": 2
+    },
+    "299": {
+      "group": "highway-252-and-glendyer",
+      "road": "Beaton Road",
+      "at": [
+        625932.9,
+        5100894.0
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#a33b32",
+      "roof": "#3a3d40",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "1048": {
+      "group": "highway-252-and-glendyer",
+      "road": "Glenora Falls Road",
+      "at": [
+        626657.6,
+        5107635.8
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#a33b32",
+      "roof": "#8e9493",
+      "trim": "#f4f2ec",
+      "roofMaterial": "metal",
+      "eave": 4.5,
+      "ridge": 8.0
+    },
+    "133": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        625609.1,
+        5103634.4
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#a08060",
+      "roof": "#3a3d40",
+      "trim": "#c4b49a",
+      "roofMaterial": "shingle",
+      "boardAndBatten": true
+    },
+    "178": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        625623.5,
+        5103589.3
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": true,
+      "shutters": false,
+      "wall": "#3f342e",
+      "roof": "#2e3134",
+      "trim": "#6b5e54",
+      "roofMaterial": "shingle"
+    },
+    "153": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        625735.4,
+        5103494.2
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "542": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627141.2,
+        5103610.2
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#8e9493",
+      "trim": "#f4f1ea",
+      "door": "#a33b32",
+      "roofMaterial": "metal",
+      "roofShape": "gable"
+    },
+    "1428": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627159.0,
+        5103624.8
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#a33b32",
+      "roof": "#6e7370",
+      "trim": "#f4f2ec",
+      "roofMaterial": "metal"
+    },
+    "1608": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627432.2,
+        5103401.5
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#6e7370",
+      "trim": "#a33b32",
+      "roofMaterial": "shingle"
+    },
+    "1576": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627659.5,
+        5103325.0
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#3d6a96",
+      "trim": "#f4f2ec",
+      "roofMaterial": "metal"
+    },
+    "786": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627802.6,
+        5103139.9
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#a33b32",
+      "roof": "#3a3d40",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "814": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        627816.0,
+        5103157.9
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#a33b32",
+      "roof": "#4a4e52",
+      "trim": "#f4f2ec",
+      "roofMaterial": "metal",
+      "roofShape": "gambrel"
+    },
+    "1183": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        628309.8,
+        5102687.1
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "367": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        629315.7,
+        5100787.9
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#4a4e52",
+      "trim": "#f4f1ea",
+      "roofMaterial": "metal"
+    },
+    "365": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        629348.2,
+        5100761.7
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "245": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        630319.1,
+        5100557.6
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": true,
+      "shutters": false,
+      "wall": "#4e5964",
+      "roof": "#32363a",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle",
+      "dormers": 2
+    },
+    "250": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        630369.3,
+        5100599.4
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "314": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        630584.5,
+        5100619.4
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#8a9aa6",
+      "roof": "#3a3d40",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle"
+    },
+    "318": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        630670.0,
+        5100663.0
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": true,
+      "shutters": true,
+      "wall": "#f4f2ec",
+      "roof": "#5c6164",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "372": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        630752.5,
+        5100813.2
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#c6a56a",
+      "roof": "#5a5e62",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "1591": {
+      "group": "highway-252-and-glendyer",
+      "road": "Highway 252",
+      "at": [
+        631626.9,
+        5101186.5
+      ],
+      "entrance": "front porch",
+      "chimney": false,
+      "dormer": true,
+      "shutters": false,
+      "wall": "#f4f2ec",
+      "roof": "#303639",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "69": {
+      "group": "highway-252-and-glendyer",
+      "road": "Lake Ainslie Chapel Road",
+      "at": [
+        631520.1,
+        5101179.6
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#8d877c",
+      "roof": "#405d49",
+      "trim": "#e2c04a",
+      "door": "#2c4d86",
+      "roofMaterial": "metal",
+      "storeys": 2
+    },
+    "1592": {
+      "group": "highway-252-and-glendyer",
+      "road": "Lake Ainslie Chapel Road",
+      "at": [
+        631520.8,
+        5101205.2
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": true,
+      "shutters": false,
+      "wall": "#6d8494",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "door": "#2c4d86",
+      "roofMaterial": "shingle"
+    },
+    "1593": {
+      "group": "highway-252-and-glendyer",
+      "road": "Lake Ainslie Chapel Road",
+      "at": [
+        631557.9,
+        5101212.7
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#3f6b48",
+      "roof": "#a1483e",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "461": {
+      "group": "highway-252-and-glendyer",
+      "road": "MacLeods Road",
+      "at": [
+        624671.7,
+        5099191.4
+      ],
+      "entrance": "front porch",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#3c3834",
+      "roof": "#3a3d40",
+      "trim": "#6b6560",
+      "roofMaterial": "shingle"
+    },
+    "459": {
+      "group": "highway-252-and-glendyer",
+      "road": "MacLeods Road",
+      "at": [
+        624713.5,
+        5099182.5
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#3a3330",
+      "roof": "#4a4e52",
+      "trim": "#6b6560",
+      "roofMaterial": "shingle"
+    },
+    "441": {
+      "group": "highway-252-and-glendyer",
+      "road": "MacLeods Road",
+      "at": [
+        624868.1,
+        5099156.0
+      ],
+      "entrance": "none",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#9aa0a4",
+      "roof": "#3a3d40",
+      "trim": "#f4f2ec",
+      "roofMaterial": "shingle",
+      "storeys": 2
+    },
+    "439": {
+      "group": "highway-252-and-glendyer",
+      "road": "MacLeods Road",
+      "at": [
+        624935.3,
+        5099135.4
+      ],
+      "entrance": "small steps",
+      "chimney": false,
+      "dormer": false,
+      "shutters": true,
+      "wall": "#c4a882",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "386": {
+      "group": "highway-252-and-glendyer",
+      "road": "MacLeods Road",
+      "at": [
+        625422.1,
+        5098793.2
+      ],
+      "entrance": "none",
+      "chimney": true,
+      "dormer": false,
+      "shutters": true,
+      "wall": "#3a3330",
+      "roof": "#984136",
+      "trim": "#6b5e54",
+      "roofMaterial": "metal"
+    },
+    "1379": {
+      "group": "highway-252-and-glendyer",
+      "road": "Whycocomagh Port Hood Road",
+      "at": [
+        625941.9,
+        5095512.1
+      ],
+      "entrance": "small steps",
+      "chimney": false,
+      "dormer": false,
+      "shutters": false,
+      "wall": "#e4d3a8",
+      "roof": "#4a4e52",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle"
+    },
+    "88": {
+      "group": "other-mabou-roads",
+      "road": "Highland Street Extension",
+      "at": [
+        624339.6,
+        5103265.7
+      ],
+      "wall": "#e0c878",
+      "roof": "#3a3d40",
+      "trim": "#f7f5ef",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
+      "dormer": false,
+      "shutters": false
+    },
+    "1551": {
+      "group": "other-mabou-roads",
+      "road": "Highland Street Extension",
+      "at": [
+        624371.8,
+        5103265.7
+      ],
+      "wall": "#a2a5a0",
+      "roof": "#3a3d40",
+      "trim": "#f4f1ea",
+      "roofMaterial": "shingle",
+      "roofShape": "gable",
       "chimney": false,
       "dormer": false,
       "shutters": false
@@ -5969,6 +5153,822 @@
       "chimney": false,
       "dormer": false,
       "shutters": false
+    },
+    "52": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        630469.9,
+        5110298.3
+      ],
+      "wall": "#9ca2a6",
+      "roof": "#787e84",
+      "trim": "#e4e6e4",
+      "door": "#a8a18d",
+      "roofMaterial": "metal"
+    },
+    "626": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        630410.9,
+        5110301.2
+      ],
+      "wall": "#7e8992",
+      "roof": "#545a60",
+      "trim": "#eff0eb",
+      "roofMaterial": "metal"
+    },
+    "1271": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        630407.3,
+        5110252.0
+      ],
+      "wall": "#dadcd9",
+      "roof": "#787e84",
+      "trim": "#ecebe6",
+      "door": "#adada7",
+      "roofMaterial": "metal"
+    },
+    "1475": {
+      "group": "blackstone-and-mull-river",
+      "road": "Blackstone Road",
+      "at": [
+        630427.0,
+        5110336.5
+      ],
+      "wall": "#a6acb0",
+      "roof": "#585e64",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle"
+    },
+    "660": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627805.0,
+        5105279.0
+      ],
+      "wall": "#ecebe5",
+      "roof": "#3e4246",
+      "trim": "#f5f4ef",
+      "roofMaterial": "shingle"
+    },
+    "804": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630654.5,
+        5109374.1
+      ],
+      "wall": "#eeede7",
+      "roof": "#4a4e52",
+      "trim": "#f5f4ef",
+      "door": "#702e26",
+      "roofMaterial": "shingle",
+      "skirting": true
+    },
+    "843": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630782.5,
+        5109423.5
+      ],
+      "wall": "#6f4539",
+      "roof": "#7e584c",
+      "trim": "#d8d4ca",
+      "door": "#685948",
+      "roofMaterial": "metal"
+    },
+    "879": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        628388.8,
+        5106456.1
+      ],
+      "wall": "#5b6064",
+      "roof": "#505458",
+      "trim": "#f2f1ec",
+      "door": "#8f826b",
+      "roofMaterial": "shingle"
+    },
+    "880": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        628401.2,
+        5106461.7
+      ],
+      "wall": "#5b6064",
+      "roof": "#505458",
+      "trim": "#f2f1ec",
+      "door": "#404241",
+      "roofMaterial": "shingle"
+    },
+    "888": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630053.0,
+        5108191.3
+      ],
+      "wall": "#e6e4d8",
+      "roof": "#8c908b",
+      "trim": "#f2f1ea",
+      "roofMaterial": "shingle"
+    },
+    "892": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630818.4,
+        5109438.8
+      ],
+      "wall": "#a7adb0",
+      "roof": "#666c70",
+      "trim": "#e8e7e0",
+      "door": "#6a302a",
+      "roofMaterial": "metal"
+    },
+    "1211": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627616.0,
+        5105087.5
+      ],
+      "wall": "#833d32",
+      "roof": "#424648",
+      "trim": "#f2f0e8",
+      "roofMaterial": "shingle"
+    },
+    "1427": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627111.8,
+        5103623.9
+      ],
+      "wall": "#e6e5de",
+      "roof": "#9aa09f",
+      "trim": "#f0efe8",
+      "roofMaterial": "shingle"
+    },
+    "1435": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        628839.5,
+        5107088.4
+      ],
+      "wall": "#90969c",
+      "roof": "#505459",
+      "trim": "#f2f1ec",
+      "roofMaterial": "shingle"
+    },
+    "1473": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        628874.8,
+        5107167.0
+      ],
+      "wall": "#983b34",
+      "roof": "#9ea4a4",
+      "trim": "#ecebe4",
+      "door": "#ababa5",
+      "roofMaterial": "metal"
+    },
+    "1536": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627254.4,
+        5104084.5
+      ],
+      "wall": "#eae9e3",
+      "roof": "#825c51",
+      "trim": "#f3f2ec",
+      "roofMaterial": "metal"
+    },
+    "1588": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        630086.6,
+        5108263.6
+      ],
+      "wall": "#e6e5de",
+      "roof": "#4c5054",
+      "trim": "#f4f3ed",
+      "roofMaterial": "shingle"
+    },
+    "930": {
+      "group": "blackstone-and-mull-river",
+      "road": "Smithville Road",
+      "at": [
+        627251.1,
+        5104130.7
+      ],
+      "wall": "#f1f0ea",
+      "roof": "#65615c",
+      "trim": "#f7f6f1",
+      "door": "#a19a83",
+      "roofMaterial": "shingle"
+    },
+    "147": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623484.5,
+        5103919.9
+      ],
+      "wall": "#dcd8c6",
+      "roof": "#505458",
+      "trim": "#ecebe4",
+      "roofMaterial": "shingle",
+      "storeys": 2
+    },
+    "177": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623406.4,
+        5104138.9
+      ],
+      "kind": "house",
+      "wall": "#e8e8e2",
+      "roof": "#464a4e",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "dormer": true,
+      "dormers": 2
+    },
+    "653": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622109.8,
+        5104632.7
+      ],
+      "wall": "#567080",
+      "roof": "#43474b",
+      "trim": "#eeede7",
+      "door": "#eeede7",
+      "roofMaterial": "shingle",
+      "chimney": false
+    },
+    "755": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        620296.0,
+        5104737.9
+      ],
+      "wall": "#e5e5dd",
+      "roof": "#7a4640",
+      "trim": "#ecece6",
+      "roofMaterial": "metal"
+    },
+    "791": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623468.4,
+        5103947.0
+      ],
+      "wall": "#4b89be",
+      "roof": "#4c5055",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "roofShape": "gable"
+    },
+    "977": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622959.5,
+        5104174.5
+      ],
+      "wall": "#e4e4de",
+      "roof": "#4a4e52",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "entrance": "deck",
+      "dormer": false,
+      "shutters": false,
+      "chimney": true
+    },
+    "1152": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622997.6,
+        5104322.2
+      ],
+      "wall": "#d6d8d4",
+      "roof": "#565a5e",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle"
+    },
+    "1163": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618734.0,
+        5105065.0
+      ],
+      "wall": "#5e7486",
+      "roof": "#42464a",
+      "trim": "#f0f0ea",
+      "door": "#ecebe4",
+      "roofMaterial": "shingle",
+      "entrance": "small steps"
+    },
+    "1215": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618597.6,
+        5105096.4
+      ],
+      "wall": "#e8e8e2",
+      "roof": "#4a4e52",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "chimney": true
+    },
+    "1263": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618460.1,
+        5105115.2
+      ],
+      "kind": "barn",
+      "wall": "#7b7d78",
+      "roof": "#4d4f52",
+      "trim": "#eeede7",
+      "door": "#ecebe5",
+      "roofMaterial": "shingle",
+      "entrance": "none"
+    },
+    "1266": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618674.1,
+        5105148.1
+      ],
+      "kind": "house",
+      "wall": "#d6d5ce",
+      "roof": "#52565a",
+      "trim": "#ecece6",
+      "door": "#ecebe6",
+      "roofMaterial": "metal",
+      "skirting": true,
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": 1
+      }
+    },
+    "1486": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622195.0,
+        5104677.5
+      ],
+      "wall": "#7d2d30",
+      "roof": "#484c50",
+      "trim": "#f0efe8",
+      "door": "#7d2d30",
+      "roofMaterial": "shingle"
+    },
+    "1487": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        621508.1,
+        5104679.7
+      ],
+      "wall": "#ecece6",
+      "roof": "#505458",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle"
+    },
+    "1496": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        620095.7,
+        5104716.5
+      ],
+      "wall": "#244749",
+      "roof": "#42464a",
+      "trim": "#f0f0ea",
+      "door": "#ecece6",
+      "roofMaterial": "shingle"
+    },
+    "1510": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622548.0,
+        5104754.0
+      ],
+      "wall": "#5e7994",
+      "roof": "#505458",
+      "trim": "#eeede7",
+      "roofMaterial": "shingle"
+    },
+    "1559": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623127.9,
+        5104126.9
+      ],
+      "kind": "house",
+      "wall": "#636c74",
+      "roof": "#52575c",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "1625": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        619416.1,
+        5105006.4
+      ],
+      "wall": "#e6e6e0",
+      "roof": "#4c5054",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle"
+    },
+    "1653": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        619074.5,
+        5105069.5
+      ],
+      "wall": "#8f2c30",
+      "roof": "#4c5156",
+      "trim": "#f0efe8",
+      "door": "#ecebe4",
+      "roofMaterial": "shingle"
+    },
+    "1672": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618493.8,
+        5105079.6
+      ],
+      "kind": "house",
+      "eave": 4.6,
+      "wall": "#74797c",
+      "roof": "#484b4e",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "104": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625502.6,
+        5103819.8
+      ],
+      "wall": "#dadcd8",
+      "roof": "#32689a",
+      "trim": "#ecece6",
+      "roofMaterial": "metal"
+    },
+    "106": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625769.1,
+        5104224.1
+      ],
+      "wall": "#636e79",
+      "roof": "#44484c",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle"
+    },
+    "115": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628753.2,
+        5110410.2
+      ],
+      "wall": "#3a4554",
+      "roof": "#43474b",
+      "trim": "#f0f0ea",
+      "door": "#adada7",
+      "roofMaterial": "shingle"
+    },
+    "118": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        626348.3,
+        5105085.6
+      ],
+      "wall": "#e2e2da",
+      "roof": "#494f52",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle"
+    },
+    "126": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628534.4,
+        5110074.9
+      ],
+      "wall": "#8a9095",
+      "roof": "#62676b",
+      "trim": "#ecece6",
+      "door": "#5d685f",
+      "roofMaterial": "shingle"
+    },
+    "142": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623453.7,
+        5102687.7
+      ],
+      "wall": "#ecece6",
+      "roof": "#7c8286",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle"
+    },
+    "155": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623732.3,
+        5102938.7
+      ],
+      "wall": "#dfe3e4",
+      "roof": "#43474b",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle"
+    },
+    "160": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623692.7,
+        5102949.6
+      ],
+      "wall": "#ecebe5",
+      "roof": "#43474b",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle"
+    },
+    "179": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623713.1,
+        5102966.2
+      ],
+      "wall": "#d2d6d8",
+      "roof": "#4c5054",
+      "trim": "#ecece6",
+      "door": "#a6a6a1",
+      "roofMaterial": "shingle"
+    },
+    "215": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623605.2,
+        5102677.8
+      ],
+      "wall": "#94afa0",
+      "roof": "#6e7377",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle"
+    },
+    "268": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        620512.4,
+        5099498.8
+      ],
+      "wall": "#4e6c82",
+      "roof": "#54595e",
+      "trim": "#ecece6",
+      "door": "#a8a18d",
+      "roofMaterial": "shingle"
+    },
+    "296": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621752.4,
+        5100878.4
+      ],
+      "wall": "#cab67c",
+      "roof": "#6e7275",
+      "trim": "#e8e6de",
+      "door": "#6f7371",
+      "roofMaterial": "shingle"
+    },
+    "297": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621774.5,
+        5100879.5
+      ],
+      "wall": "#964440",
+      "roof": "#7c8084",
+      "trim": "#ecebe6",
+      "door": "#5d6b71",
+      "roofMaterial": "metal"
+    },
+    "524": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        622357.0,
+        5101693.0
+      ],
+      "wall": "#8f8377",
+      "roof": "#54585c",
+      "trim": "#e6e5de",
+      "roofMaterial": "shingle"
+    },
+    "583": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        622650.4,
+        5101849.1
+      ],
+      "wall": "#ecebe6",
+      "roof": "#8e332f",
+      "trim": "#f0efe9",
+      "door": "#6f7371",
+      "roofMaterial": "metal"
+    },
+    "904": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621879.1,
+        5101043.4
+      ],
+      "wall": "#989ea2",
+      "roof": "#6c7175",
+      "trim": "#ecece6",
+      "door": "#a19a83",
+      "roofMaterial": "shingle"
+    },
+    "1179": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        622261.5,
+        5101493.0
+      ],
+      "wall": "#c8ccc9",
+      "roof": "#c4c8c5",
+      "trim": "#dadcd9",
+      "door": "#702e26",
+      "roofMaterial": "metal"
+    },
+    "1284": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623797.1,
+        5102802.8
+      ],
+      "wall": "#a63632",
+      "roof": "#44484c",
+      "trim": "#f0efe9",
+      "door": "#a29d88",
+      "roofMaterial": "shingle"
+    },
+    "1341": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        620503.9,
+        5099522.8
+      ],
+      "wall": "#4e6c82",
+      "roof": "#54595e",
+      "trim": "#ecece6",
+      "door": "#584a3b",
+      "roofMaterial": "shingle"
+    },
+    "1358": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621480.3,
+        5100699.3
+      ],
+      "wall": "#e8e8e2",
+      "roof": "#45494d",
+      "trim": "#f0f0ea",
+      "door": "#877860",
+      "roofMaterial": "shingle"
+    },
+    "1359": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621446.0,
+        5100703.7
+      ],
+      "wall": "#e8e8e2",
+      "roof": "#45494d",
+      "trim": "#f0f0ea",
+      "door": "#787a76",
+      "roofMaterial": "shingle"
+    },
+    "1361": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616101.6,
+        5096518.1
+      ],
+      "wall": "#6e5645",
+      "roof": "#54585c",
+      "trim": "#55483e",
+      "door": "#787a76",
+      "roofMaterial": "metal"
+    },
+    "1371": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616171.6,
+        5096543.1
+      ],
+      "wall": "#ecebe6",
+      "roof": "#44484c",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle"
+    },
+    "1527": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628791.0,
+        5110426.6
+      ],
+      "wall": "#4e5358",
+      "roof": "#b83634",
+      "trim": "#ecece6",
+      "roofMaterial": "metal"
+    },
+    "1547": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621890.3,
+        5101023.9
+      ],
+      "wall": "#aeb4b8",
+      "roof": "#707579",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle"
     }
   }
 }
