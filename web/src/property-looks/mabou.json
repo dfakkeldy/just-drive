@@ -5655,6 +5655,226 @@
         "end": false,
         "side": -1
       }
+    },
+    "630": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624012.8,
+        5101875.5
+      ],
+      "kind": "house",
+      "wall": "#dadcd8",
+      "roof": "#54585c",
+      "trim": "#f0f0ea",
+      "door": "#ecebe4",
+      "roofMaterial": "shingle",
+      "shutters": true,
+      "skirting": true,
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      }
+    },
+    "638": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624007.1,
+        5101920.8
+      ],
+      "kind": "house",
+      "wall": "#9ea8b0",
+      "roof": "#4b5258",
+      "trim": "#eeede8",
+      "door": "#7c3034",
+      "roofMaterial": "metal",
+      "chimney": true,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "723": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624008.0,
+        5102021.6
+      ],
+      "kind": "house",
+      "wall": "#8c9298",
+      "roof": "#585c60",
+      "trim": "#f0f0ea",
+      "door": "#ecebe4",
+      "roofMaterial": "shingle",
+      "entrance": "deck",
+      "front": {
+        "end": false,
+        "side": 1
+      }
+    },
+    "1125": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623938.0,
+        5102620.0
+      ],
+      "wall": "#e8e3d2",
+      "roof": "#585c60",
+      "trim": "#f0efe8",
+      "door": "#eeede7",
+      "roofMaterial": "shingle"
+    },
+    "1133": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624011.5,
+        5102671.5
+      ],
+      "wall": "#dcdcd6",
+      "roof": "#52565a",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "roofShape": "gable"
+    },
+    "1228": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624177.5,
+        5101526.0
+      ],
+      "wall": "#e8e8e2",
+      "roof": "#54585c",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle"
+    },
+    "1248": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623919.9,
+        5102769.3
+      ],
+      "kind": "house",
+      "wall": "#cfc9bc",
+      "roof": "#6e5c52",
+      "trim": "#ecebe4",
+      "door": "#ecebe4",
+      "roofMaterial": "shingle",
+      "chimney": true,
+      "entrance": "deck",
+      "front": {
+        "end": true,
+        "side": 1
+      }
+    },
+    "1285": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623865.6,
+        5102805.4
+      ],
+      "wall": "#3c4147",
+      "roof": "#43474b",
+      "trim": "#ecebe4",
+      "roofMaterial": "shingle"
+    },
+    "1288": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623905.1,
+        5102809.6
+      ],
+      "kind": "house",
+      "wall": "#eaeae4",
+      "roof": "#585c60",
+      "trim": "#f0f0ea",
+      "door": "#ecebe6",
+      "roofMaterial": "shingle",
+      "skirting": true,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "1367": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623988.3,
+        5100794.4
+      ],
+      "kind": "house",
+      "wall": "#eaeae4",
+      "roof": "#5a5e62",
+      "trim": "#f0f0ea",
+      "door": "#ecebe4",
+      "roofMaterial": "shingle",
+      "chimney": true,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": 1
+      }
+    },
+    "1370": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623961.7,
+        5100825.2
+      ],
+      "kind": "barn",
+      "wall": "#a63630",
+      "roof": "#9aa0a2",
+      "trim": "#dcdad2",
+      "door": "#a4a6a2",
+      "roofMaterial": "metal"
+    },
+    "1378": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        624413.2,
+        5099788.6
+      ],
+      "wall": "#cfc6b4",
+      "roof": "#9da2a4",
+      "trim": "#eceae2",
+      "roofMaterial": "metal",
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "1572": {
+      "group": "west-and-southwest-mabou",
+      "road": "Southwest Ridge Road",
+      "at": [
+        623959.2,
+        5102470.7
+      ],
+      "kind": "house",
+      "wall": "#c8cdd0",
+      "roof": "#585c60",
+      "trim": "#f0f0ea",
+      "door": "#eeede7",
+      "roofMaterial": "shingle",
+      "entrance": "deck",
+      "front": {
+        "end": true,
+        "side": 1
+      }
     }
   }
 }
