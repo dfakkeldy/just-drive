@@ -145,6 +145,12 @@
       "roads": [
         "Macdonald Street"
       ]
+    },
+    "rose-street": {
+      "label": "Rose Street",
+      "roads": [
+        "Rose Street"
+      ]
     }
   },
   "overrides": {
@@ -1991,6 +1997,29 @@
       "wall": "#dcded6",
       "roof": "#555657",
       "trim": "#eeece2"
+    },
+    "1151": {
+      "group": "rose-street",
+      "road": "Rose Street",
+      "at": [
+        628507.38,
+        5052045.45
+      ],
+      "wall": "#d8d7c7",
+      "roof": "#55585a",
+      "trim": "#e9e6d8",
+      "door": "#ababa5"
+    },
+    "1157": {
+      "group": "rose-street",
+      "road": "Rose Street",
+      "at": [
+        628436.96,
+        5052049.98
+      ],
+      "wall": "#dddcd0",
+      "roof": "#53595b",
+      "trim": "#f0ede2"
     }
   }
 }
