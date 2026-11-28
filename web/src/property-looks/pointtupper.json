@@ -2,6 +2,12 @@
   "version": 1,
   "area": "pointtupper",
   "groups": {
+    "old-victoria-road": {
+      "label": "Old Victoria Road",
+      "roads": [
+        "Old Victoria Road"
+      ]
+    },
     "granville-street": {
       "label": "Granville Street",
       "roads": [
@@ -154,6 +160,15 @@
     }
   },
   "overrides": {
+    "59": {
+      "group": "old-victoria-road",
+      "road": "Old Victoria Road",
+      "at": [
+        624393.86,
+        5056164.11
+      ],
+      "roof": "#98534e"
+    },
     "664": {
       "group": "granville-street",
       "road": "Granville Street",
