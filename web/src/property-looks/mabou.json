@@ -5379,6 +5379,321 @@
       "trim": "#f7f6f1",
       "door": "#a19a83",
       "roofMaterial": "shingle"
+    },
+    "1361": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616101.6,
+        5096518.1
+      ],
+      "wall": "#6e5645",
+      "roof": "#54585c",
+      "trim": "#55483e",
+      "door": "#787a76",
+      "roofMaterial": "metal"
+    },
+    "1371": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        616171.6,
+        5096543.1
+      ],
+      "wall": "#ecebe6",
+      "roof": "#44484c",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle"
+    },
+    "268": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        620512.4,
+        5099498.8
+      ],
+      "wall": "#4e6c82",
+      "roof": "#54595e",
+      "trim": "#ecece6",
+      "door": "#a8a18d",
+      "roofMaterial": "shingle"
+    },
+    "1341": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        620503.9,
+        5099522.8
+      ],
+      "wall": "#4e6c82",
+      "roof": "#54595e",
+      "trim": "#ecece6",
+      "door": "#584a3b",
+      "roofMaterial": "shingle"
+    },
+    "1358": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621480.3,
+        5100699.3
+      ],
+      "wall": "#e8e8e2",
+      "roof": "#45494d",
+      "trim": "#f0f0ea",
+      "door": "#877860",
+      "roofMaterial": "shingle"
+    },
+    "1359": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621446.0,
+        5100703.7
+      ],
+      "wall": "#e8e8e2",
+      "roof": "#45494d",
+      "trim": "#f0f0ea",
+      "door": "#787a76",
+      "roofMaterial": "shingle"
+    },
+    "296": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621752.4,
+        5100878.4
+      ],
+      "wall": "#cab67c",
+      "roof": "#6e7275",
+      "trim": "#e8e6de",
+      "door": "#6f7371",
+      "roofMaterial": "shingle"
+    },
+    "297": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621774.5,
+        5100879.5
+      ],
+      "wall": "#964440",
+      "roof": "#7c8084",
+      "trim": "#ecebe6",
+      "door": "#5d6b71",
+      "roofMaterial": "metal"
+    },
+    "904": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621879.1,
+        5101043.4
+      ],
+      "wall": "#989ea2",
+      "roof": "#6c7175",
+      "trim": "#ecece6",
+      "door": "#a19a83",
+      "roofMaterial": "shingle"
+    },
+    "1547": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        621890.3,
+        5101023.9
+      ],
+      "wall": "#aeb4b8",
+      "roof": "#707579",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle"
+    },
+    "1179": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        622261.5,
+        5101493.0
+      ],
+      "wall": "#c8ccc9",
+      "roof": "#c4c8c5",
+      "trim": "#dadcd9",
+      "door": "#702e26",
+      "roofMaterial": "metal"
+    },
+    "524": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        622357.0,
+        5101693.0
+      ],
+      "wall": "#8f8377",
+      "roof": "#54585c",
+      "trim": "#e6e5de",
+      "roofMaterial": "shingle"
+    },
+    "583": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        622650.4,
+        5101849.1
+      ],
+      "wall": "#ecebe6",
+      "roof": "#8e332f",
+      "trim": "#f0efe9",
+      "door": "#6f7371",
+      "roofMaterial": "metal"
+    },
+    "215": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623605.2,
+        5102677.8
+      ],
+      "wall": "#94afa0",
+      "roof": "#6e7377",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle"
+    },
+    "142": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        623453.7,
+        5102687.7
+      ],
+      "wall": "#ecece6",
+      "roof": "#7c8286",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle"
+    },
+    "1284": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623797.1,
+        5102802.8
+      ],
+      "wall": "#a63632",
+      "roof": "#44484c",
+      "trim": "#f0efe9",
+      "door": "#ecece6",
+      "roofMaterial": "shingle"
+    },
+    "155": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623732.3,
+        5102938.7
+      ],
+      "wall": "#dfe3e4",
+      "roof": "#43474b",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle"
+    },
+    "160": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623692.7,
+        5102949.6
+      ],
+      "wall": "#ecebe5",
+      "roof": "#43474b",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle"
+    },
+    "179": {
+      "group": "mabou-village",
+      "road": "Highway 19",
+      "at": [
+        623713.1,
+        5102966.2
+      ],
+      "wall": "#d2d6d8",
+      "roof": "#4c5054",
+      "trim": "#ecece6",
+      "door": "#a6a6a1",
+      "roofMaterial": "shingle"
+    },
+    "104": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625502.6,
+        5103819.8
+      ],
+      "wall": "#dadcd8",
+      "roof": "#32689a",
+      "trim": "#ecece6",
+      "roofMaterial": "metal"
+    },
+    "106": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        625769.1,
+        5104224.1
+      ],
+      "wall": "#636e79",
+      "roof": "#44484c",
+      "trim": "#f0efe9",
+      "door": "#ecece6",
+      "roofMaterial": "shingle"
+    },
+    "118": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        626348.3,
+        5105085.6
+      ],
+      "wall": "#e2e2da",
+      "roof": "#494f52",
+      "trim": "#f0efe9",
+      "roofMaterial": "shingle"
+    },
+    "126": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628534.4,
+        5110074.9
+      ],
+      "wall": "#8a9095",
+      "roof": "#62676b",
+      "trim": "#ecece6",
+      "door": "#5d685f",
+      "roofMaterial": "shingle"
+    },
+    "115": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628753.2,
+        5110410.2
+      ],
+      "wall": "#3a4554",
+      "roof": "#43474b",
+      "trim": "#f0f0ea",
+      "door": "#adada7",
+      "roofMaterial": "shingle"
+    },
+    "1527": {
+      "group": "highway-19",
+      "road": "Highway 19",
+      "at": [
+        628791.0,
+        5110426.6
+      ],
+      "wall": "#4e5358",
+      "roof": "#b83634",
+      "trim": "#ecece6",
+      "roofMaterial": "metal"
     }
   }
 }
