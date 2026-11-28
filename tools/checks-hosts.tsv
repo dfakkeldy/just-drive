@@ -378,3 +378,4 @@ westbay-track263-drive	portable	yes	Node real-land same-path drive check on West
 guysborough-turbines-delta	portable	yes	Python synthetic build/install/rollback/refusal fixture (runs in CI without data/); checks all six tall.json packs and byte-for-byte remake when data/ and GDAL exist
 brook-village	portable	yes	Node check for Brook Village store (69) and church (1570) on baked Mabou land (skips cleanly on clean-clone CI without data/)
 brook-village-browser	apple	no	Hardware WebGL on Mabou land: Brook Village store and church desktop/LOW triangles, hidden boxes 69 and 1570, live driveVehicle contacts and open lanes; pictures
+troy-westbay-delta	portable	yes	Python synthetic make/install/rollback/refusal fixture (runs in CI without data/); checks Canso Causeway land state before/after and zero-gap West Bay road continuity when data/baked exists

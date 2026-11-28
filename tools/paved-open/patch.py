@@ -37,6 +37,7 @@ from land_receipt_pins import previous_digest
 from paved_provenance import validate  # role-scoped path patterns and the denied historical payload hashes
 RECEIPT = ROOT/'tools/paved-open/hashes.json'
 REFRESH = ROOT/'tools/paved-open/hashes-refresh.json'
+TROY_WESTBAY = ROOT/'tools/troy-westbay-delta/hashes.json'
 # Verified Point Tupper road 107 width delta: re-baking all 117 Point Tupper paved tiles on its roads.json
 # produces byte-for-byte identical .r8 tiles (only provenanceSha256 in index.json depends on the roads.json hash).
 INDUSTRIAL_WIDTH = ROOT/'tools/industrial-surface/width-hashes.json'
@@ -104,6 +105,12 @@ def area_matches(baked, area):
 def refresh_installed(baked):
     """Recognize the full refreshed pavement, and check its current inputs."""
     report = json.loads(REFRESH.read_text())
+    if TROY_WESTBAY.is_file():
+        cc_manifest_path = baked/'areas/cansocauseway/manifest.json'
+        if cc_manifest_path.is_file():
+            troy = json.loads(TROY_WESTBAY.read_text())
+            if json.loads(cc_manifest_path.read_bytes()).get('mid') == troy.get('afterMid') and 'pavedArea' in troy:
+                report = dict(report, areas=[troy['pavedArea'] if a['area'] == 'cansocauseway' else a for a in report['areas']])
     for area in report['areas']:
         path = baked/area['folder']/'manifest.json'
         if not path.is_file():

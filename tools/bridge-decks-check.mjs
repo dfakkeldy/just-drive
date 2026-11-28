@@ -1265,8 +1265,9 @@ async function testAllAreasRealLand(replacements = {}) {
     const binPath = resolve(dataRoot, 'data/baked', areaBase(area), asset.file);
     assert.ok(existsSync(binPath), `${area}: ${binPath} exists`);
     const rawBytes = readFileSync(binPath);
-    assert.equal(rawBytes.length, asset.bytes, `${area}: installed byte length matches descriptor`);
-    assert.equal(sha(rawBytes), asset.sha256, `${area}: installed SHA-256 matches descriptor`);
+    const expected = asset.alt?.find(a => a.bytes === rawBytes.length) ?? asset;
+    assert.equal(rawBytes.length, expected.bytes, `${area}: installed byte length matches descriptor`);
+    assert.equal(sha(rawBytes), expected.sha256, `${area}: installed SHA-256 matches descriptor`);
     const baked = mod.decodeBridgeDecks(rawBytes, area);
     assert.equal(baked.exag, mod.BAKED_BRIDGE_EXAG);
     assert.equal(baked.seaLevel, mod.BAKED_BRIDGE_SEA_LEVEL);

@@ -34,7 +34,7 @@ export const AREA_BOXES: readonly { id: string; box: readonly [number, number, n
   { id: 'porthood', box: [607884, 5086948, 620172, 5103332] },
   { id: 'pointtupper', box: [620172, 5045988, 632460, 5058276] },
   { id: 'westbay', box: [628364, 5058276, 654988, 5078756] },
-  { id: 'cansocauseway', box: [616076, 5054180, 626316, 5072612] },
+  { id: 'cansocauseway', box: [616076, 5054180, 628364, 5072612] },
 ];
 
 /** Forward Transverse Mercator, UTM 20N on GRS80 (EPSG:2961).

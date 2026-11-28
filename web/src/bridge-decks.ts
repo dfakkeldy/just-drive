@@ -300,7 +300,7 @@ export async function loadBridgeDecks(
 ): Promise<BakedBridgeDecks | null> {
   if (exag !== BAKED_BRIDGE_EXAG || seaLevel !== BAKED_BRIDGE_SEA_LEVEL) return null;
   if (!Object.hasOwn(BRIDGE_DECK_ASSETS, area)) return null;
-  const asset = BRIDGE_DECK_ASSETS[area]!;
+  let asset = BRIDGE_DECK_ASSETS[area]!;
   const controller = typeof AbortController === 'function' ? new AbortController() : null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -316,6 +316,8 @@ export async function loadBridgeDecks(
       const res = controller ? await fetch(url, { signal: controller.signal }) : await fetch(url);
       if (!res.ok) throw new Error(`${res.status} ${url}`);
       const blob = await res.blob();
+      const matchedAlt = asset.alt?.find(a => a.bytes === blob.size);
+      if (matchedAlt) asset = { ...asset, ...matchedAlt };
       if (blob.size !== asset.bytes) throw new Error('Bridge deck asset length mismatch');
       const bytes = await blob.arrayBuffer();
       const digest = await crypto.subtle.digest('SHA-256', bytes);
