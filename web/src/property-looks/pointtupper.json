@@ -127,6 +127,12 @@
       "roads": [
         "Embree Street"
       ]
+    },
+    "napean-street": {
+      "label": "Napean Street",
+      "roads": [
+        "Napean Street"
+      ]
     }
   },
   "overrides": {
@@ -1906,6 +1912,17 @@
       "roof": "#3c4148",
       "trim": "#f1efe8",
       "roofMaterial": "shingle"
+    },
+    "1251": {
+      "group": "napean-street",
+      "road": "Napean Street",
+      "at": [
+        627380.75,
+        5053215.25
+      ],
+      "wall": "#8f3b33",
+      "roof": "#505154",
+      "trim": "#e7e0d1"
     }
   }
 }
