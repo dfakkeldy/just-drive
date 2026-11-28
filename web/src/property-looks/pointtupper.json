@@ -121,6 +121,12 @@
       "roads": [
         "Maclean Crt"
       ]
+    },
+    "embree-street": {
+      "label": "Embree Street",
+      "roads": [
+        "Embree Street"
+      ]
     }
   },
   "overrides": {
@@ -1863,6 +1869,42 @@
       "roof": "#505358",
       "trim": "#dedbd2",
       "door": "#685948",
+      "roofMaterial": "shingle"
+    },
+    "690": {
+      "group": "embree-street",
+      "road": "Embree Street",
+      "at": [
+        627683.1,
+        5052460.66
+      ],
+      "wall": "#8d453c",
+      "roof": "#3a3d40",
+      "trim": "#ddd6c8",
+      "roofMaterial": "shingle"
+    },
+    "691": {
+      "group": "embree-street",
+      "road": "Embree Street",
+      "at": [
+        627660.46,
+        5052492.55
+      ],
+      "wall": "#b7c0c6",
+      "roof": "#3e4448",
+      "trim": "#f3f2ee",
+      "roofMaterial": "shingle"
+    },
+    "692": {
+      "group": "embree-street",
+      "road": "Embree Street",
+      "at": [
+        627680.97,
+        5052502.38
+      ],
+      "wall": "#c8c6bc",
+      "roof": "#3c4148",
+      "trim": "#f1efe8",
       "roofMaterial": "shingle"
     }
   }
