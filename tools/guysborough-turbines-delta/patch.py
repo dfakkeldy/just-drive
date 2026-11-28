@@ -19,6 +19,7 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RECEIPT = HERE / 'hashes.json'
+TROY_RECEIPT = ROOT / 'tools/troy-westbay-delta/hashes.json'
 POINTS_PATH = ROOT / 'pipeline/far-views-points.json'
 
 PACKS = (
@@ -303,6 +304,16 @@ def make(source: Path, raw: Path, output: Path, *, verify: bool = True, receipt_
     return report
 
 
+def _troy_after_tall(pack: str, manifest: dict) -> str | None:
+    if pack != 'areas/cansocauseway' or not TROY_RECEIPT.is_file():
+        return None
+    troy = json.loads(TROY_RECEIPT.read_text())
+    if manifest.get('mid') != troy.get('afterMid'):
+        return None
+    entry = next((f for f in troy.get('files', []) if f['file'] == f'{pack}/tall.json'), None)
+    return entry['sha256'] if entry else None
+
+
 def land_state(baked: Path, receipt: dict) -> tuple[str, list[str]]:
     """Return ('before' | 'after' | 'mixed', details) for all six areas in baked."""
     states = {}
@@ -318,9 +329,10 @@ def land_state(baked: Path, receipt: dict) -> tuple[str, list[str]]:
         digest = sha(tall_path.read_bytes())
         manifest = json.loads(manifest_path.read_text())
         mtall = manifest.get('tall')
+        troy_sha = _troy_after_tall(pack, manifest)
         if digest == entry['before'] and mtall == entry['beforeManifestTall']:
             states[pack] = 'before'
-        elif digest == entry['sha256'] and mtall == entry['afterManifestTall']:
+        elif (digest == entry['sha256'] or (troy_sha is not None and digest == troy_sha)) and mtall == entry['afterManifestTall']:
             states[pack] = 'after'
         else:
             states[pack] = 'unknown'

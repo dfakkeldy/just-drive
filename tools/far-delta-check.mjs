@@ -14,6 +14,8 @@ const ROOT=resolve(fileURLToPath(new URL('..',import.meta.url)));
 export const LIST=JSON.parse(readFileSync(join(ROOT,'tools/far-views-delta.json'),'utf8'));
 const GUYSBOROUGH_RECEIPT=join(ROOT,'tools/guysborough-turbines-delta/hashes.json');
 export const GUYSBOROUGH=existsSync(GUYSBOROUGH_RECEIPT)?JSON.parse(readFileSync(GUYSBOROUGH_RECEIPT,'utf8')):null;
+const TROY_RECEIPT=join(ROOT,'tools/troy-westbay-delta/hashes.json');
+export const TROY=existsSync(TROY_RECEIPT)?JSON.parse(readFileSync(TROY_RECEIPT,'utf8')):null;
 const sha=path=>createHash('sha256').update(readFileSync(path)).digest('hex');
 const json=path=>JSON.parse(readFileSync(path,'utf8'));
 
@@ -32,6 +34,16 @@ export function withGuysboroughDelta(base=LIST,delta=GUYSBOROUGH,side='after'){
   }
  }
  return {...base,packs};
+}
+
+/** Build an alternate LIST with the Troy-to-West Bay cansocauseway tall.json mid-box update applied. */
+export function withTroyWestbayDelta(base,delta=TROY){
+ if(!base||!delta)return null;
+ const pack=delta.pack??'areas/cansocauseway';
+ const entry=base.packs[pack];if(!entry)return null;
+ const tall=delta.files?.find(f=>f.file===pack+'/tall.json');
+ if(!tall?.sha256)return null;
+ return {...base,packs:{...base.packs,[pack]:{...entry,files:{...entry.files,'tall.json':{sha256:tall.sha256,bytes:tall.bytes}}}}};
 }
 
 function landStateFor(baked,list){
@@ -62,7 +74,7 @@ function landStateFor(baked,list){
 }
 
 /** 'before' or 'after' for one baked folder; throws on any mixed or unknown state. */
-export function landState(baked,list=LIST,alts=list===LIST?[withGuysboroughDelta(list,GUYSBOROUGH,'before'),withGuysboroughDelta(list,GUYSBOROUGH,'after')].filter(Boolean):[]){
+export function landState(baked,list=LIST,alts=list===LIST?(()=>{const gBefore=withGuysboroughDelta(list,GUYSBOROUGH,'before'),gAfter=withGuysboroughDelta(list,GUYSBOROUGH,'after');return [gBefore,gAfter,withTroyWestbayDelta(gAfter,TROY)].filter(Boolean);})():[]){
  try{return landStateFor(baked,list);}
  catch(firstError){
   for(const alt of alts){try{return landStateFor(baked,alt);}catch{}}
@@ -133,7 +145,14 @@ function mutations(){
   cpSync(join(afterAlt,second,'tall.json'),join(mixedAlt,second,'tall.json'));
   cpSync(join(afterAlt,second,'manifest.json'),join(mixedAlt,second,'manifest.json'));
   assert.throws(()=>landState(mixedAlt,list,alts),undefined,'mutant accepted: mixed-alt-revisions');
-  console.log('PASS before, after and alt-after accepted; 8 mutants rejected (changed file, missing file, missing key, changed count, mixed areas, v2 tall without pack, far count without pack, mixed revisions)');
+  const troyAlt=join(tmp,'troy-alt');cpSync(afterAlt,troyAlt,{recursive:true});
+  const tText=JSON.stringify({version:2,pack:second,mid:[616076,5054180,628364,5072612]});
+  const tp=write(troyAlt,second,'tall.json',tText);
+  const troyList=withTroyWestbayDelta(alts[1],{pack:second,files:[{file:second+'/tall.json',sha256:sha(tp),bytes:tText.length}]});
+  assert.equal(landState(troyAlt,list,[...alts,troyList]),'after');
+  writeFileSync(tp,JSON.stringify({version:2,pack:second,mid:[0,0,1,1]}));
+  assert.throws(()=>landState(troyAlt,list,[...alts,troyList]),undefined,'mutant accepted: tampered-troy-tall');
+  console.log('PASS before, after and alt-after accepted; 9 mutants rejected (changed file, missing file, missing key, changed count, mixed areas, v2 tall without pack, far count without pack, mixed revisions, tampered troy tall)');
  }finally{rmSync(tmp,{recursive:true,force:true});}
 }
 

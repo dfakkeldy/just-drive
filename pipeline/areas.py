@@ -423,8 +423,9 @@ WESTBAY = Area(
 
 CANSOCAUSEWAY = Area(
     observed_styles='pipeline/observed_styles_cansocauseway.json',
-    id='cansocauseway', name='Canso Causeway and Troy', origin=(591500, 5103332), mid_tiles=(12, 15, 17, 24),
-    anchor=(623581, 5056272), fetch_box=(-61.518623, 45.624174, -61.366785, 45.802815),
+    id='cansocauseway', name='Canso Causeway and Troy', origin=(591500, 5103332), mid_tiles=(12, 15, 18, 24),
+    anchor=(623581, 5056272), fetch_box=(-61.518623, 45.624174, -61.340, 45.802815),
+    extra_corridor=('MacIntyre Mountain Road',),
     highways=(4, 19, 104, 105, 344), anchor_highway=19, wide_source='pointtupper', exclude_utility_trees=True,
     interpolate_coastal_trail=True, avoid_wing_overlaps=True,
     keep_roads=(
