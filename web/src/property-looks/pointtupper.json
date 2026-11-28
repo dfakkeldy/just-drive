@@ -139,6 +139,12 @@
       "roads": [
         "Water Street"
       ]
+    },
+    "macdonald-street": {
+      "label": "Macdonald Street",
+      "roads": [
+        "Macdonald Street"
+      ]
     }
   },
   "overrides": {
@@ -1962,6 +1968,29 @@
       "wall": "#ded6c0",
       "roof": "#5b514e",
       "trim": "#ebe6d8"
+    },
+    "215": {
+      "group": "macdonald-street",
+      "road": "Macdonald Street",
+      "at": [
+        628669.84,
+        5051954.34
+      ],
+      "wall": "#824e42",
+      "roof": "#505355",
+      "trim": "#d1c9b9",
+      "door": "#adada7"
+    },
+    "248": {
+      "group": "macdonald-street",
+      "road": "Macdonald Street",
+      "at": [
+        628637,
+        5051944.5
+      ],
+      "wall": "#dcded6",
+      "roof": "#555657",
+      "trim": "#eeece2"
     }
   }
 }
