@@ -2,6 +2,12 @@
   "version": 1,
   "area": "pointtupper",
   "groups": {
+    "macintosh-ave": {
+      "label": "MacIntosh Ave",
+      "roads": [
+        "MacIntosh Ave"
+      ]
+    },
     "old-victoria-road": {
       "label": "Old Victoria Road",
       "roads": [
@@ -160,6 +166,28 @@
     }
   },
   "overrides": {
+    "99": {
+      "group": "macintosh-ave",
+      "road": "MacIntosh Ave",
+      "at": [
+        629348.74,
+        5052401.1
+      ],
+      "wall": "#a59678",
+      "door": "#adada7"
+    },
+    "1984": {
+      "group": "macintosh-ave",
+      "road": "MacIntosh Ave",
+      "at": [
+        629275.75,
+        5052433.75
+      ],
+      "wall": "#923c39",
+      "roof": "#454b4e",
+      "trim": "#d6d3c7",
+      "door": "#787a76"
+    },
     "59": {
       "group": "old-victoria-road",
       "road": "Old Victoria Road",
