@@ -5379,6 +5379,284 @@
       "trim": "#f7f6f1",
       "door": "#a19a83",
       "roofMaterial": "shingle"
+    },
+    "147": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623484.5,
+        5103919.9
+      ],
+      "wall": "#dcd8c6",
+      "roof": "#505458",
+      "trim": "#ecebe4",
+      "roofMaterial": "shingle",
+      "storeys": 2
+    },
+    "177": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623406.4,
+        5104138.9
+      ],
+      "kind": "house",
+      "wall": "#e8e8e2",
+      "roof": "#464a4e",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": 1
+      },
+      "dormer": true,
+      "dormers": 2
+    },
+    "653": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622109.8,
+        5104632.7
+      ],
+      "wall": "#567080",
+      "roof": "#43474b",
+      "trim": "#eeede7",
+      "door": "#eeede7",
+      "roofMaterial": "shingle",
+      "chimney": false
+    },
+    "755": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        620296.0,
+        5104737.9
+      ],
+      "wall": "#e5e5dd",
+      "roof": "#7a4640",
+      "trim": "#ecece6",
+      "roofMaterial": "metal"
+    },
+    "791": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623468.4,
+        5103947.0
+      ],
+      "wall": "#4b89be",
+      "roof": "#4c5055",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "roofShape": "gable"
+    },
+    "977": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622959.5,
+        5104174.5
+      ],
+      "wall": "#e4e4de",
+      "roof": "#4a4e52",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "entrance": "deck",
+      "dormer": false,
+      "shutters": false,
+      "chimney": true
+    },
+    "1152": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622997.6,
+        5104322.2
+      ],
+      "wall": "#d6d8d4",
+      "roof": "#565a5e",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle"
+    },
+    "1163": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618734.0,
+        5105065.0
+      ],
+      "wall": "#5e7486",
+      "roof": "#42464a",
+      "trim": "#f0f0ea",
+      "door": "#ecebe4",
+      "roofMaterial": "shingle",
+      "entrance": "small steps"
+    },
+    "1215": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618597.6,
+        5105096.4
+      ],
+      "wall": "#e8e8e2",
+      "roof": "#4a4e52",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle",
+      "chimney": true
+    },
+    "1263": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618460.1,
+        5105115.2
+      ],
+      "kind": "barn",
+      "wall": "#7b7d78",
+      "roof": "#4d4f52",
+      "trim": "#eeede7",
+      "door": "#ecebe5",
+      "roofMaterial": "shingle",
+      "entrance": "none",
+      "rollUpDoor": true
+    },
+    "1266": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618674.1,
+        5105148.1
+      ],
+      "kind": "house",
+      "wall": "#d6d5ce",
+      "roof": "#52565a",
+      "trim": "#ecece6",
+      "door": "#ecebe6",
+      "roofMaterial": "metal",
+      "skirting": true,
+      "storeys": 1,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": 1
+      }
+    },
+    "1486": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622195.0,
+        5104677.5
+      ],
+      "wall": "#7d2d30",
+      "roof": "#484c50",
+      "trim": "#f0efe8",
+      "door": "#7d2d30",
+      "roofMaterial": "shingle"
+    },
+    "1487": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        621508.1,
+        5104679.7
+      ],
+      "wall": "#ecece6",
+      "roof": "#505458",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle"
+    },
+    "1496": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        620095.7,
+        5104716.5
+      ],
+      "wall": "#244749",
+      "roof": "#42464a",
+      "trim": "#f0f0ea",
+      "door": "#ecece6",
+      "roofMaterial": "shingle",
+      "roofShape": "hip"
+    },
+    "1510": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        622548.0,
+        5104754.0
+      ],
+      "wall": "#5e7994",
+      "roof": "#505458",
+      "trim": "#eeede7",
+      "roofMaterial": "shingle"
+    },
+    "1559": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        623127.9,
+        5104126.9
+      ],
+      "kind": "house",
+      "wall": "#636c74",
+      "roof": "#52575c",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "entrance": "front porch",
+      "front": {
+        "end": false,
+        "side": -1
+      }
+    },
+    "1625": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        619416.1,
+        5105006.4
+      ],
+      "wall": "#e6e6e0",
+      "roof": "#4c5054",
+      "trim": "#f0f0ea",
+      "roofMaterial": "shingle"
+    },
+    "1653": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        619074.5,
+        5105069.5
+      ],
+      "wall": "#8f2c30",
+      "roof": "#4c5156",
+      "trim": "#f0efe8",
+      "door": "#ecebe4",
+      "roofMaterial": "shingle"
+    },
+    "1672": {
+      "group": "mabou-harbour-and-mines",
+      "road": "Mabou Harbour Road",
+      "at": [
+        618493.8,
+        5105079.6
+      ],
+      "kind": "house",
+      "wall": "#74797c",
+      "roof": "#484b4e",
+      "trim": "#ecece6",
+      "roofMaterial": "shingle",
+      "storeys": 2,
+      "entrance": "small steps",
+      "front": {
+        "end": false,
+        "side": -1
+      }
     }
   }
 }
