@@ -5580,9 +5580,8 @@
       "wall": "#a63632",
       "roof": "#44484c",
       "trim": "#f0efe9",
-      "door": "#ecece6",
-      "roofMaterial": "shingle",
-      "rollUpDoor": true
+      "door": "#a29d88",
+      "roofMaterial": "shingle"
     },
     "155": {
       "group": "mabou-village",
@@ -5643,15 +5642,7 @@
       "wall": "#636e79",
       "roof": "#44484c",
       "trim": "#f0efe9",
-      "roofMaterial": "shingle",
-      "attachedGarage": {
-        "end": false,
-        "side": 1,
-        "offset": 0,
-        "width": 2.4,
-        "doors": 2,
-        "door": "#ecece6"
-      }
+      "roofMaterial": "shingle"
     },
     "118": {
       "group": "highway-19",
